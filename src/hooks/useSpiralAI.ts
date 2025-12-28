@@ -1,4 +1,13 @@
-import { useState, useCallback, useRef } from "react";
+/**
+ * Spiral AI Hook - Enterprise Grade with Deterministic FSM
+ * 
+ * APEX Architecture Phase 1: The Brain
+ * - Uses SpiralMachine for strict state transitions
+ * - Maintains backward-compatible API surface
+ * - Prevents race conditions via event-driven state management
+ */
+
+import { useState, useCallback, useRef, useReducer, useMemo } from "react";
 import { useSessionStore } from "@/stores/sessionStore";
 import { createLogger } from "@/lib/logger";
 import { isUserFrustrated, wantsToSkip } from "@/lib/frustrationDetector";
@@ -16,6 +25,17 @@ import {
   type Pattern,
   type FastTrackState,
 } from "@/lib/fastTrack";
+import {
+  spiralReducer,
+  createInitialContext,
+  isProcessing as isMachineProcessing,
+  canStartProcessing,
+  canTriggerCinematic,
+  type SpiralContext,
+  type SpiralEvent,
+  type SpiralState,
+  type ProcessingSubState,
+} from "@/lib/spiralMachine";
 import type { EntityType, EntityMetadata, Entity } from "@/lib/types";
 
 const logger = createLogger("useSpiralAI");
@@ -64,6 +84,7 @@ interface UseSpiralAIOptions {
   onBreakthrough?: (data?: BreakthroughData) => void;
   onPatternDetected?: (patterns: Pattern[]) => void;
   onError?: (error: Error) => void;
+  onStateChange?: (state: SpiralState, subState: ProcessingSubState) => void;
   autoSendInterval?: number;
   userTier?: UserTier;
 }
@@ -72,16 +93,42 @@ export function useSpiralAI(options: UseSpiralAIOptions = {}) {
   const { autoSendInterval = 10000, userTier = "free" } = options;
   const entityLimit = getEntityLimit(userTier);
   
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [processingStage, setProcessingStage] = useState<"extracting" | "generating" | "breakthrough" | null>(null);
+  // =========================================================================
+  // DETERMINISTIC FSM - The Brain
+  // =========================================================================
+  const [machineContext, dispatch] = useReducer(spiralReducer, undefined, createInitialContext);
+  
+  // Typed dispatch helper
+  const sendEvent = useCallback((event: SpiralEvent) => {
+    dispatch(event);
+    
+    // Call state change callback after dispatch
+    const nextContext = spiralReducer(machineContext, event);
+    options.onStateChange?.(nextContext.state, nextContext.processingSubState);
+  }, [machineContext, options]);
+  
+  // =========================================================================
+  // DERIVED STATE (Backward Compatible API)
+  // =========================================================================
+  const isProcessing = useMemo(() => isMachineProcessing(machineContext), [machineContext]);
+  const processingStage = machineContext.processingSubState;
+  const showCinematic = machineContext.state === "CINEMATIC";
+  const machineError = machineContext.error;
+  
+  // =========================================================================
+  // LEGACY STATE (Will be migrated to FSM in future phases)
+  // =========================================================================
   const [currentQuestion, setCurrentQuestion] = useState<string | null>(null);
   const [currentStage, setCurrentStage] = useState<ConversationStage>("friction");
   const [lastResponse, setLastResponse] = useState<string | null>(null);
   const [breakthroughData, setBreakthroughData] = useState<BreakthroughData | null>(null);
   const [showBreakthroughCard, setShowBreakthroughCard] = useState(false);
   const [ultraFastMode, setUltraFastMode] = useState(false);
-  const [showCinematic, setShowCinematic] = useState(false);
   const [cinematicComplete, setCinematicComplete] = useState(false);
+  
+  // =========================================================================
+  // REFS (Mutable State)
+  // =========================================================================
   const transcriptBufferRef = useRef<string>("");
   const lastSendTimeRef = useRef<number>(0);
   const conversationHistoryRef = useRef<string[]>([]);
@@ -96,12 +143,25 @@ export function useSpiralAI(options: UseSpiralAIOptions = {}) {
     triggerBreakthrough,
   } = useSessionStore();
 
+  // =========================================================================
+  // CINEMATIC CONTROL (FSM-Driven)
+  // =========================================================================
+  
+  const setShowCinematic = useCallback((show: boolean) => {
+    if (show && canTriggerCinematic(machineContext)) {
+      sendEvent({ type: "TRIGGER_CINEMATIC" });
+    } else if (!show && machineContext.state === "CINEMATIC") {
+      sendEvent({ type: "CINEMATIC_COMPLETE" });
+    }
+  }, [machineContext, sendEvent]);
+
   // Force breakthrough with cinematic sequence
   const forceBreakthrough = useCallback((data?: BreakthroughData) => {
     logger.info("FORCING BREAKTHROUGH", {
       reason: data ? "synthesis_complete" : "user_action",
       patterns: patternsRef.current.map(p => p.name),
       hasData: !!data,
+      currentState: machineContext.state,
     });
 
     setCurrentQuestion(null);
@@ -118,18 +178,22 @@ export function useSpiralAI(options: UseSpiralAIOptions = {}) {
       });
     }
 
-    // Trigger cinematic first (it will call completion handlers)
-    setShowCinematic(true);
-    setCinematicComplete(false);
-
-    logger.info("Cinematic triggered, waiting for completion before showing card");
-  }, []);
+    // Trigger cinematic via FSM
+    if (canTriggerCinematic(machineContext)) {
+      sendEvent({ type: "TRIGGER_CINEMATIC" });
+      setCinematicComplete(false);
+      logger.info("Cinematic triggered via FSM, waiting for completion");
+    } else {
+      logger.warn("Cannot trigger cinematic from current state", { state: machineContext.state });
+    }
+  }, [machineContext, sendEvent]);
 
   // Handle cinematic completion
   const handleCinematicComplete = useCallback(() => {
     logger.info("Cinematic complete, triggering breakthrough effects");
 
     setCinematicComplete(true);
+    sendEvent({ type: "CINEMATIC_COMPLETE" });
     triggerBreakthrough(); // Visual effects in 3D scene
 
     // Show breakthrough card after cinematic
@@ -159,7 +223,7 @@ export function useSpiralAI(options: UseSpiralAIOptions = {}) {
         });
       }
     }, 300); // Brief delay for visual polish
-  }, [breakthroughData, triggerBreakthrough, addMessage, options]);
+  }, [breakthroughData, triggerBreakthrough, addMessage, options, sendEvent]);
 
   // Dismiss breakthrough card
   const dismissBreakthroughCard = useCallback(() => {
@@ -175,10 +239,21 @@ export function useSpiralAI(options: UseSpiralAIOptions = {}) {
     }
   }, []);
 
-  // Process transcript through AI
+  // =========================================================================
+  // CORE PROCESSING (FSM-Driven)
+  // =========================================================================
+
   const processTranscript = useCallback(
     async (transcript: string): Promise<SpiralAIResponse | null> => {
-      if (!transcript.trim() || isProcessing) return null;
+      // FSM Guard: Check if we can start processing
+      if (!transcript.trim()) return null;
+      
+      if (!canStartProcessing(machineContext)) {
+        logger.warn("Cannot start processing from current state", {
+          currentState: machineContext.state,
+        });
+        return null;
+      }
 
       // Track conversation history
       conversationHistoryRef.current.push(transcript);
@@ -212,14 +287,19 @@ export function useSpiralAI(options: UseSpiralAIOptions = {}) {
         fastTrackRef.current.readyForBreakthrough = true;
       }
 
-      logger.info("Processing transcript", { 
+      logger.info("Processing transcript via FSM", { 
         length: transcript.length,
         stage: fastTrackRef.current.stage,
         questionsAsked: fastTrackRef.current.questionsAsked,
         readyForBreakthrough: fastTrackRef.current.readyForBreakthrough,
+        currentState: machineContext.state,
       });
-      setIsProcessing(true);
-      setProcessingStage(fastTrackRef.current.readyForBreakthrough ? "breakthrough" : "extracting");
+      
+      // FSM Transition: START_PROCESSING
+      sendEvent({ 
+        type: "START_PROCESSING", 
+        payload: { forceBreakthrough: fastTrackRef.current.readyForBreakthrough } 
+      });
 
       try {
         // Get stage-specific prompt hints
@@ -251,12 +331,18 @@ export function useSpiralAI(options: UseSpiralAIOptions = {}) {
           throw new Error(`HTTP ${response.status}`);
         }
 
+        // FSM Transition: START_DELIBERATING (AI thinking)
+        sendEvent({ type: "START_DELIBERATING" });
+
         const data: SpiralAIResponse = await response.json();
 
         logger.info("AI response received", {
           entityCount: data.entities.length,
           hasQuestion: !!data.question,
         });
+
+        // FSM Transition: START_RESPONDING
+        sendEvent({ type: "START_RESPONDING" });
 
         // Process entities with coherence validation
         let processedEntities = data.entities;
@@ -355,7 +441,6 @@ export function useSpiralAI(options: UseSpiralAIOptions = {}) {
           // Check for repetition
           if (antiRepetition.isTooSimilar(processedQuestion)) {
             logger.warn("Question too similar, keeping original for now", { question: processedQuestion });
-            // In future: could request regeneration from AI
           }
           
           // Match user's energy
@@ -386,6 +471,9 @@ export function useSpiralAI(options: UseSpiralAIOptions = {}) {
             logger.info("Max questions reached, next response will be breakthrough");
             fastTrackRef.current.readyForBreakthrough = true;
           }
+          
+          // FSM Transition: RESPONSE_COMPLETE
+          sendEvent({ type: "RESPONSE_COMPLETE" });
         } else {
           // No question = breakthrough time
           // Extract breakthrough data with robust parsing
@@ -451,7 +539,7 @@ export function useSpiralAI(options: UseSpiralAIOptions = {}) {
               };
             }
 
-            // Trigger breakthrough with data
+            // Trigger breakthrough with data (FSM handles transition)
             forceBreakthrough(btData);
           } catch (error) {
             logger.error("Failed to extract breakthrough data", error);
@@ -474,14 +562,18 @@ export function useSpiralAI(options: UseSpiralAIOptions = {}) {
         return data;
       } catch (error) {
         logger.error("Failed to process transcript", error as Error);
+        
+        // FSM Transition: ERROR
+        sendEvent({ 
+          type: "ERROR", 
+          payload: { message: (error as Error).message || "Unknown error" } 
+        });
+        
         options.onError?.(error as Error);
         return null;
-      } finally {
-        setIsProcessing(false);
-        setProcessingStage(null);
       }
     },
-    [currentSession, addEntity, addConnection, addMessage, isProcessing, options, forceBreakthrough]
+    [currentSession, addEntity, addConnection, addMessage, machineContext, options, forceBreakthrough, sendEvent, entityLimit]
   );
 
   // Skip to breakthrough button handler
@@ -491,6 +583,10 @@ export function useSpiralAI(options: UseSpiralAIOptions = {}) {
 
   // Reset for new session
   const resetSession = useCallback(() => {
+    // FSM Reset
+    sendEvent({ type: "RESET" });
+    
+    // Legacy state reset
     fastTrackRef.current = createFastTrackState();
     conversationHistoryRef.current = [];
     patternsRef.current = [];
@@ -501,7 +597,8 @@ export function useSpiralAI(options: UseSpiralAIOptions = {}) {
     setBreakthroughData(null);
     setShowBreakthroughCard(false);
     setUltraFastMode(false);
-  }, []);
+    setCinematicComplete(false);
+  }, [sendEvent]);
 
   // Accumulate transcript and auto-send periodically
   const accumulateTranscript = useCallback((text: string) => {
@@ -514,7 +611,7 @@ export function useSpiralAI(options: UseSpiralAIOptions = {}) {
     if (
       transcriptBufferRef.current.length > 50 &&
       timeSinceLastSend > autoSendInterval &&
-      !isProcessing
+      canStartProcessing(machineContext)
     ) {
       const buffer = transcriptBufferRef.current;
       transcriptBufferRef.current = "";
@@ -528,11 +625,11 @@ export function useSpiralAI(options: UseSpiralAIOptions = {}) {
       
       processTranscript(buffer);
     }
-  }, [autoSendInterval, isProcessing, processTranscript, addMessage]);
+  }, [autoSendInterval, machineContext, processTranscript, addMessage]);
 
   // Send current buffer immediately
   const sendBuffer = useCallback(() => {
-    if (transcriptBufferRef.current.trim() && !isProcessing) {
+    if (transcriptBufferRef.current.trim() && canStartProcessing(machineContext)) {
       const buffer = transcriptBufferRef.current;
       transcriptBufferRef.current = "";
       lastSendTimeRef.current = Date.now();
@@ -545,7 +642,7 @@ export function useSpiralAI(options: UseSpiralAIOptions = {}) {
       
       processTranscript(buffer);
     }
-  }, [isProcessing, processTranscript, addMessage]);
+  }, [machineContext, processTranscript, addMessage]);
 
   // Clear buffer
   const clearBuffer = useCallback(() => {
@@ -557,7 +654,21 @@ export function useSpiralAI(options: UseSpiralAIOptions = {}) {
     setCurrentQuestion(null);
   }, []);
 
+  // Dismiss error (FSM transition)
+  const dismissError = useCallback(() => {
+    sendEvent({ type: "DISMISS_ERROR" });
+  }, [sendEvent]);
+
+  // =========================================================================
+  // BACKWARD COMPATIBLE RETURN API
+  // =========================================================================
   return {
+    // FSM State (new)
+    machineState: machineContext.state,
+    machineContext,
+    sendEvent,
+    
+    // Legacy compatible state
     isProcessing,
     processingStage,
     currentQuestion,
@@ -569,6 +680,12 @@ export function useSpiralAI(options: UseSpiralAIOptions = {}) {
     questionCount: fastTrackRef.current.questionsAsked,
     maxQuestions: MAX_QUESTIONS,
     detectedPatterns: patternsRef.current,
+    
+    // Error state (enhanced)
+    machineError,
+    dismissError,
+    
+    // Actions
     processTranscript,
     accumulateTranscript,
     sendBuffer,
@@ -578,6 +695,8 @@ export function useSpiralAI(options: UseSpiralAIOptions = {}) {
     resetSession,
     dismissBreakthroughCard,
     toggleUltraFastMode,
+    
+    // Cinematic control
     showCinematic,
     cinematicComplete,
     handleCinematicComplete,
