@@ -88,7 +88,7 @@ export class FPSMonitor {
  */
 export function detectDeviceCapabilities(): DeviceCapabilities {
   const canvas = document.createElement('canvas');
-  const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+  const gl = canvas.getContext('webgl') as WebGLRenderingContext | null;
 
   let gpuTier = 2; // Default to medium
   let maxTextureSize = 2048;
@@ -96,7 +96,7 @@ export function detectDeviceCapabilities(): DeviceCapabilities {
 
   if (gl) {
     // Get max texture size
-    maxTextureSize = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+    maxTextureSize = gl.getParameter(gl.MAX_TEXTURE_SIZE) as number;
 
     // Check WebGL version
     const gl2 = canvas.getContext('webgl2');
