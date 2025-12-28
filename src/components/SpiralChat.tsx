@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState, useCallback } from "react";
 import { Send, Maximize2, Minimize2, Sparkles, Cog, Droplets, Zap, SkipForward } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -306,8 +307,10 @@ export function SpiralChat() {
 
   const entityCount = currentSession?.entities?.length || 0;
 
+  const hasActiveHeader = sessionState !== "idle";
+
   return (
-    <div className="flex h-[calc(100vh-73px)] flex-col lg:flex-row">
+    <div className={cn("flex flex-col lg:flex-row", hasActiveHeader ? "h-[calc(100vh-73px-52px)] mt-[52px]" : "h-[calc(100vh-73px)]")}>
       {/* Floating Menu Button */}
       <FloatingMenuButton
         sessionState={sessionState}
@@ -340,9 +343,12 @@ export function SpiralChat() {
         }
       />
 
-      {/* Quick Actions Bar */}
+      {/* Quick Actions Header Bar */}
       <QuickActionsBar
         sessionState={sessionState}
+        questionCount={questionCount}
+        maxQuestions={maxQuestions}
+        timeElapsed={sessionElapsed}
         onPause={handlePause}
         onResume={handleResume}
         onStop={handleStop}
@@ -524,13 +530,16 @@ export function SpiralChat() {
         {/* Input Area */}
         <div className="border-t border-border/30 glass-card rounded-none border-x-0 border-b-0 p-4">
           <div className="mx-auto max-w-2xl">
-            {/* Mic Button */}
+            {/* Mic Button with Stop/Pause controls */}
             <div className="mb-5 flex justify-center">
               <MicButton
                 isRecording={isRecording}
                 isProcessing={isAIProcessing}
                 isSupported={isSupported}
+                isPaused={isPaused}
                 onClick={handleMicToggle}
+                onPause={isRecording ? (isPaused ? handleResume : handlePause) : undefined}
+                onStop={isRecording ? stopRecording : undefined}
               />
             </div>
 
