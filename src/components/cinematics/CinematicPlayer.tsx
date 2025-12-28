@@ -214,6 +214,8 @@ export function CinematicPlayer({
               )
             }
             blendFunction={BlendFunction.NORMAL}
+            radialModulation={false}
+            modulationOffset={0}
           />
         )}
       </EffectComposer>

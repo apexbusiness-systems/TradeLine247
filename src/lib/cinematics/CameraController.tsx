@@ -38,12 +38,13 @@ export const CameraController = forwardRef<CameraControllerRef, CameraController
     ref
   ) => {
     const { camera } = useThree();
+    const perspectiveCamera = camera as THREE.PerspectiveCamera;
     const startTime = useRef<number | null>(null);
     const isPlaying = useRef(autoStart);
     const isPaused = useRef(false);
     const pausedElapsed = useRef(0);
     const lookAtTarget = useRef<THREE.Vector3 | null>(null);
-    const initialFov = useRef(camera.fov);
+    const initialFov = useRef(perspectiveCamera.fov ?? 60);
 
     // Parse easing function
     const easingFn = useRef<EasingFunction>(
@@ -59,7 +60,9 @@ export const CameraController = forwardRef<CameraControllerRef, CameraController
       }
 
       // Store initial FOV
-      initialFov.current = camera.fov;
+      if ('fov' in camera) {
+        initialFov.current = (camera as THREE.PerspectiveCamera).fov;
+      }
     }, [path.lookAt, camera]);
 
     // Expose control methods via ref
@@ -70,9 +73,9 @@ export const CameraController = forwardRef<CameraControllerRef, CameraController
         const targetPos = new THREE.Vector3(path.to.x, path.to.y, path.to.z);
         camera.position.copy(targetPos);
 
-        if (path.fov) {
-          camera.fov = path.fov.to;
-          camera.updateProjectionMatrix();
+        if (path.fov && 'fov' in camera) {
+          (camera as THREE.PerspectiveCamera).fov = path.fov.to;
+          (camera as THREE.PerspectiveCamera).updateProjectionMatrix();
         }
 
         if (lookAtTarget.current) {
@@ -104,9 +107,9 @@ export const CameraController = forwardRef<CameraControllerRef, CameraController
         const startPos = new THREE.Vector3(path.from.x, path.from.y, path.from.z);
         camera.position.copy(startPos);
 
-        if (path.fov) {
-          camera.fov = path.fov.from;
-          camera.updateProjectionMatrix();
+        if (path.fov && 'fov' in camera) {
+          (camera as THREE.PerspectiveCamera).fov = path.fov.from;
+          (camera as THREE.PerspectiveCamera).updateProjectionMatrix();
         }
       },
       getProgress: () => {
@@ -164,9 +167,9 @@ export const CameraController = forwardRef<CameraControllerRef, CameraController
       }
 
       // Interpolate FOV if specified
-      if (path.fov) {
-        camera.fov = path.fov.from + (path.fov.to - path.fov.from) * t;
-        camera.updateProjectionMatrix();
+      if (path.fov && 'fov' in camera) {
+        (camera as THREE.PerspectiveCamera).fov = path.fov.from + (path.fov.to - path.fov.from) * t;
+        (camera as THREE.PerspectiveCamera).updateProjectionMatrix();
       }
 
       // Look at target

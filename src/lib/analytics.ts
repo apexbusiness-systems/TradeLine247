@@ -26,10 +26,10 @@ export function initAnalytics() {
       autocapture: false, // Manual tracking only
       capture_pageview: true,
       capture_pageleave: true,
+      disable_session_recording: false,
       session_recording: {
-        enabled: true,
         maskAllInputs: true, // Privacy-first
-        maskAllText: false,
+        maskTextSelector: undefined,
       },
       persistence: 'localStorage',
       opt_out_capturing_by_default: false,
