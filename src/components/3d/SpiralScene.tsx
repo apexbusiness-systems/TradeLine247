@@ -115,6 +115,15 @@ function SpiralEntities() {
     console.log("Entity clicked:", entity);
   };
 
+  // Register mesh ref for direct physics updates
+  const handleMeshRef = useCallback((id: string) => (mesh: THREE.Mesh | null) => {
+    if (mesh) {
+      meshRefs.current.set(id, mesh);
+    } else {
+      meshRefs.current.delete(id);
+    }
+  }, []);
+
   return (
     <>
       {/* Render entities with adaptive visibility */}
@@ -131,6 +140,7 @@ function SpiralEntities() {
             isVisible={isVisible}
             onClick={handleEntityClick}
             showLabel={importance > 0.7 ? "important" : "hover"}
+            onMeshRef={handleMeshRef(entity.id)}
           />
         );
       })}

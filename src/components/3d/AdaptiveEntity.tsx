@@ -11,6 +11,8 @@ interface AdaptiveEntityProps {
   isVisible: boolean;
   onClick?: (entity: Entity) => void;
   showLabel?: "always" | "hover" | "important";
+  /** Callback to register mesh ref for direct position updates (60FPS physics) */
+  onMeshRef?: (mesh: THREE.Mesh | null) => void;
 }
 
 function EntityGeometry({ 
@@ -41,11 +43,21 @@ export function AdaptiveEntity({
   isVisible,
   onClick,
   showLabel = "hover",
+  onMeshRef,
 }: AdaptiveEntityProps) {
   const meshRef = useRef<THREE.Mesh>(null);
+  const groupRef = useRef<THREE.Group>(null);
   const [hovered, setHovered] = useState(false);
   const [selected, setSelected] = useState(false);
   const [appeared, setAppeared] = useState(false);
+  
+  // Register mesh ref for direct position updates from physics worker
+  useEffect(() => {
+    if (groupRef.current) {
+      onMeshRef?.(groupRef.current as unknown as THREE.Mesh);
+    }
+    return () => onMeshRef?.(null);
+  }, [onMeshRef]);
   
   // Animate appearance
   useEffect(() => {
@@ -104,7 +116,7 @@ export function AdaptiveEntity({
       floatIntensity={0.3}
       floatingRange={[-0.05, 0.05]}
     >
-      <group position={position}>
+      <group ref={groupRef} position={position}>
         {/* Main mesh */}
         <mesh
           ref={meshRef}
