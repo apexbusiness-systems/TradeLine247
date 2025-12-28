@@ -40,9 +40,12 @@ export function CinematicPlayer({
 
   // Performance & Quality
   const adaptiveQuality = useRef<AdaptiveQuality | null>(null);
-  const [qualitySettings, setQualitySettings] = useState(() => {
-    const aq = new AdaptiveQuality(setQualitySettings);
-    return aq.getQualitySettings();
+  const [qualitySettings, setQualitySettings] = useState<ReturnType<AdaptiveQuality['getQualitySettings']>>({
+    particleMultiplier: 1,
+    enablePostProcessing: true,
+    enableShadows: true,
+    renderScale: 1,
+    antialias: true,
   });
 
   // Audio
