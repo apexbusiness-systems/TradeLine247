@@ -7,6 +7,8 @@ import demoVideo from "@/assets/demo-video.mp4";
 import aspiralLogo from "@/assets/aspiral-logo.png";
 import visualizeIcon from "@/assets/visualize-icon.png";
 import voiceIcon from "@/assets/voice-icon.png";
+import questionIcon from "@/assets/question-icon.png";
+import breakthroughIcon from "@/assets/breakthrough-icon.png";
 
 const Landing = () => {
   const [isDemoOpen, setIsDemoOpen] = useState(false);
@@ -113,13 +115,13 @@ const Landing = () => {
               },
               {
                 step: 3,
-                emoji: "💬",
+                customIcon: questionIcon,
                 title: "Answer 2-3 questions",
                 description: "Not 20. Just what matters. AI finds the core.",
               },
               {
                 step: 4,
-                emoji: "✨",
+                customIcon: breakthroughIcon,
                 title: "Get your breakthrough",
                 description: "Friction → Grease → Insight. From Spiraling to Aspiring.",
               },
@@ -132,11 +134,7 @@ const Landing = () => {
                   {item.step}
                 </div>
                 <div className="mb-4 pt-2">
-                  {item.customIcon ? (
-                    <img src={item.customIcon} alt={item.title} className="w-10 h-10" />
-                  ) : (
-                    <span className="text-4xl">{item.emoji}</span>
-                  )}
+                  <img src={item.customIcon} alt={item.title} className="w-10 h-10" />
                 </div>
                 <h3 className="font-display text-xl font-semibold mb-2 group-hover:text-primary transition-colors">
                   {item.title}
