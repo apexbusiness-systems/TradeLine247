@@ -1,11 +1,42 @@
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { SpiralChat } from "@/components/SpiralChat";
 import { Toaster } from "@/components/ui/toaster";
 import { AuroraBackground } from "@/components/effects/AuroraBackground";
 import { BreakthroughOverlay } from "@/components/effects/BreakthroughOverlay";
 import { UserMenu } from "@/components/auth/UserMenu";
+import { MobileNav } from "@/components/MobileNav";
+import { useIsMobile } from "@/hooks/use-mobile";
 import aspiralLogo from "@/assets/aspiral-logo.png";
 
+type MobileTab = "home" | "record" | "history" | "settings";
+
 const Index = () => {
+  const navigate = useNavigate();
+  const isMobile = useIsMobile();
+  const [activeTab, setActiveTab] = useState<MobileTab>("home");
+  const [isRecording, setIsRecording] = useState(false);
+
+  const handleTabChange = (tab: MobileTab) => {
+    setActiveTab(tab);
+    
+    // Navigate based on tab
+    switch (tab) {
+      case "history":
+        navigate("/sessions");
+        break;
+      case "settings":
+        // Could open settings modal or navigate
+        break;
+      case "record":
+        // Toggle recording state - will be connected to SpiralChat
+        setIsRecording((prev) => !prev);
+        break;
+      default:
+        break;
+    }
+  };
+
   return (
     <div className="app-container flex min-h-screen flex-col">
       {/* Aurora background system */}
@@ -36,10 +67,17 @@ const Index = () => {
         </div>
       </header>
 
-      {/* Main Chat Area */}
-      <main className="relative z-10 flex-1">
+      {/* Main Chat Area - add bottom padding on mobile for nav */}
+      <main className={`relative z-10 flex-1 ${isMobile ? 'pb-16' : ''}`}>
         <SpiralChat />
       </main>
+
+      {/* Mobile Navigation */}
+      <MobileNav 
+        activeTab={activeTab} 
+        onTabChange={handleTabChange}
+        isRecording={isRecording}
+      />
 
       <Toaster />
     </div>
