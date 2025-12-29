@@ -21,7 +21,11 @@ const Index = () => {
       <header className="relative z-10 border-b border-border/50 px-6 py-4 glass-card rounded-none border-x-0 border-t-0">
         <div className="mx-auto flex max-w-6xl items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src={aspiralLogo} alt="aSpiral" className="h-[2.78rem]" />
+            <img 
+              src={aspiralLogo} 
+              alt="aSpiral" 
+              className="h-[2.78rem] drop-shadow-[0_0_8px_hsl(var(--primary)/0.6)] hover:drop-shadow-[0_0_12px_hsl(var(--primary)/0.8)] transition-all duration-300" 
+            />
           </div>
           <div className="flex items-center gap-4">
             <span className="text-fluid-sm text-muted-foreground font-display tracking-wide hidden sm:block">
