@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
+import questionIcon from "@/assets/question-icon.png";
 
 interface QuestionBubbleProps {
   question: string;
@@ -62,9 +62,9 @@ export function QuestionBubble({
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2.5">
             <div className="relative">
-              <Sparkles className="h-5 w-5 text-secondary" />
-              <div className="absolute inset-0 text-secondary blur-sm opacity-50">
-                <Sparkles className="h-5 w-5" />
+              <img src={questionIcon} alt="Question" className="h-5 w-5" />
+              <div className="absolute inset-0 blur-sm opacity-50">
+                <img src={questionIcon} alt="" className="h-5 w-5" />
               </div>
             </div>
             <span className="text-xs font-medium text-secondary uppercase tracking-widest">
