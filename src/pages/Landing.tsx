@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Play, Mic, Eye, MessageCircle, Sparkles, ArrowRight, X } from "lucide-react";
+import { Play, Sparkles, ArrowRight } from "lucide-react";
 import demoVideo from "@/assets/demo-video.mp4";
 import aspiralLogo from "@/assets/aspiral-logo.png";
 
@@ -99,28 +99,24 @@ const Landing = () => {
             {[
               {
                 step: 1,
-                icon: Mic,
                 emoji: "🎤",
                 title: "Voice your chaos",
                 description: "Just talk. No typing. Let it all out.",
               },
               {
                 step: 2,
-                icon: Eye,
                 emoji: "🌀",
                 title: "Watch it visualize",
                 description: "Your thoughts become 3D objects you can see and understand.",
               },
               {
                 step: 3,
-                icon: MessageCircle,
                 emoji: "💬",
                 title: "Answer 2-3 questions",
                 description: "Not 20. Just what matters. AI finds the core.",
               },
               {
                 step: 4,
-                icon: Sparkles,
                 emoji: "✨",
                 title: "Get your breakthrough",
                 description: "Friction → Grease → Insight. From Spiraling to Aspiring.",
