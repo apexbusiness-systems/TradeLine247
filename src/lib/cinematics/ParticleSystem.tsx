@@ -48,6 +48,8 @@ export const ParticleSystem = forwardRef<ParticleSystemRef, ParticleSystemProps>
     const isActive = useRef(autoStart);
     const tempObject = useMemo(() => new THREE.Object3D(), []);
     const tempColor = useMemo(() => new THREE.Color(), []);
+    // Reusable Vector3 for velocity calculations - eliminates per-frame allocations
+    const tempVelocity = useMemo(() => new THREE.Vector3(), []);
 
     // Parse colors
     const colors = useMemo(() => {
@@ -168,8 +170,9 @@ export const ParticleSystem = forwardRef<ParticleSystemRef, ParticleSystemProps>
           }
         }
 
-        // Update position
-        particle.position.add(particle.velocity.clone().multiplyScalar(delta));
+        // Update position using pooled vector (no per-frame allocation)
+        tempVelocity.copy(particle.velocity).multiplyScalar(delta);
+        particle.position.add(tempVelocity);
 
         // Update scale based on life (fade out)
         const lifeRatio = particle.life / particle.maxLife;

@@ -117,12 +117,18 @@ export class BreakthroughDirector {
   
   /**
    * Handle WebGL context loss gracefully
+   * Forces immediate completion to fallback UI - safe mode may still fail to render
    */
   handleWebGLContextLost(): void {
-    logger.warn('WebGL context lost during breakthrough');
+    logger.warn('WebGL context lost during breakthrough - forcing immediate completion');
     this.trackEvent('error');
     this.state.error = 'webgl_context_lost';
-    this.triggerSafeMode();
+
+    // Force immediate completion instead of safe mode
+    // Safe mode still requires WebGL which may not be available
+    if (this.state.phase === 'playing' || this.state.phase === 'settling') {
+      this.finalize(false, 'webgl_context_lost');
+    }
   }
   
   /**

@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useRef, useState, useCallback } from "react";
+import { Suspense, useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls, Stars } from "@react-three/drei";
 import { AdaptiveEntity } from "./AdaptiveEntity";
@@ -10,6 +10,7 @@ import { useSessionStore } from "@/stores/sessionStore";
 import { useSoundEffects } from "@/hooks/useSoundEffects";
 import { usePhysicsWorker, useFallbackLayout } from "@/hooks/usePhysicsWorker";
 import { getVisibleLimit, getStaggerDelay } from "@/lib/entityLimits";
+import { detectDeviceCapabilities } from "@/lib/performance/optimizer";
 import type { Entity } from "@/lib/types";
 import * as THREE from "three";
 
@@ -266,18 +267,36 @@ function FrictionEffects() {
 }
 
 function SceneContent() {
+  // Adaptive star count based on device capabilities
+  const starCount = useMemo(() => {
+    const capabilities = detectDeviceCapabilities();
+
+    // Low-end devices: minimal stars
+    if (capabilities.deviceType === 'mobile' || capabilities.gpuTier === 1) {
+      return 300;
+    }
+
+    // Mid-range: moderate stars
+    if (capabilities.deviceType === 'tablet' || capabilities.gpuTier === 2) {
+      return 500;
+    }
+
+    // High-end: full stars
+    return 800;
+  }, []);
+
   return (
     <>
       {/* Lighting */}
       <ambientLight intensity={0.3} />
       <pointLight position={[10, 10, 10]} intensity={1} />
       <pointLight position={[-10, -10, -10]} intensity={0.5} color="#8b5cf6" />
-      
-      {/* Environment - reduced for performance */}
+
+      {/* Environment - adaptive count for performance */}
       <Stars
         radius={80}
         depth={40}
-        count={800}
+        count={starCount}
         factor={3}
         saturation={0}
         fade
