@@ -376,4 +376,8 @@ export interface DeviceCapabilities {
   webglVersion: number;
   /** Available memory (MB) */
   availableMemory?: number;
+  /** GPU vendor (e.g., "NVIDIA Corporation") */
+  gpuVendor?: string;
+  /** GPU renderer (e.g., "NVIDIA GeForce RTX 3080") */
+  gpuRenderer?: string;
 }

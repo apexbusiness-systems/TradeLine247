@@ -7,15 +7,23 @@ import type { QualitySettings, DeviceCapabilities, PerformanceMetrics } from '..
 import { getDeviceType, getMemoryUsage } from '../analytics';
 
 /**
- * FPS monitor class
+ * FPS monitor class with O(1) circular buffer
+ * Eliminates array.shift() overhead for better performance
  */
 export class FPSMonitor {
-  private frames: number[] = [];
+  private readonly capacity = 60;
+  private frames: Float32Array;
+  private head = 0;
+  private count = 0;
   private lastTime = performance.now();
   private frameCount = 0;
 
+  constructor() {
+    this.frames = new Float32Array(this.capacity);
+  }
+
   /**
-   * Update FPS (call every frame)
+   * Update FPS (call every frame) - O(1) operation
    */
   update(): void {
     const now = performance.now();
@@ -23,12 +31,11 @@ export class FPSMonitor {
     this.lastTime = now;
 
     const fps = 1000 / delta;
-    this.frames.push(fps);
 
-    // Keep only last 60 frames
-    if (this.frames.length > 60) {
-      this.frames.shift();
-    }
+    // Circular buffer insertion - O(1), no array shifting
+    this.frames[this.head] = fps;
+    this.head = (this.head + 1) % this.capacity;
+    this.count = Math.min(this.count + 1, this.capacity);
 
     this.frameCount++;
   }
@@ -37,33 +44,49 @@ export class FPSMonitor {
    * Get current FPS
    */
   getCurrentFPS(): number {
-    if (this.frames.length === 0) return 0;
-    return this.frames[this.frames.length - 1];
+    if (this.count === 0) return 0;
+    const lastIndex = (this.head - 1 + this.capacity) % this.capacity;
+    return this.frames[lastIndex];
   }
 
   /**
    * Get average FPS
    */
   getAverageFPS(): number {
-    if (this.frames.length === 0) return 0;
-    const sum = this.frames.reduce((a, b) => a + b, 0);
-    return sum / this.frames.length;
+    if (this.count === 0) return 0;
+    let sum = 0;
+    for (let i = 0; i < this.count; i++) {
+      sum += this.frames[i];
+    }
+    return sum / this.count;
   }
 
   /**
    * Get minimum FPS
    */
   getMinFPS(): number {
-    if (this.frames.length === 0) return 0;
-    return Math.min(...this.frames);
+    if (this.count === 0) return 0;
+    let min = Infinity;
+    for (let i = 0; i < this.count; i++) {
+      if (this.frames[i] < min) {
+        min = this.frames[i];
+      }
+    }
+    return min;
   }
 
   /**
    * Get maximum FPS
    */
   getMaxFPS(): number {
-    if (this.frames.length === 0) return 0;
-    return Math.max(...this.frames);
+    if (this.count === 0) return 0;
+    let max = -Infinity;
+    for (let i = 0; i < this.count; i++) {
+      if (this.frames[i] > max) {
+        max = this.frames[i];
+      }
+    }
+    return max;
   }
 
   /**
@@ -77,14 +100,17 @@ export class FPSMonitor {
    * Reset monitor
    */
   reset(): void {
-    this.frames = [];
+    this.frames.fill(0);
+    this.head = 0;
+    this.count = 0;
     this.lastTime = performance.now();
     this.frameCount = 0;
   }
 }
 
 /**
- * Detect device capabilities
+ * Detect device capabilities with GPU fingerprinting
+ * Uses WEBGL_debug_renderer_info for accurate GPU identification
  */
 export function detectDeviceCapabilities(): DeviceCapabilities {
   const canvas = document.createElement('canvas');
@@ -93,6 +119,8 @@ export function detectDeviceCapabilities(): DeviceCapabilities {
   let gpuTier = 2; // Default to medium
   let maxTextureSize = 2048;
   let webglVersion = 1;
+  let gpuVendor = 'unknown';
+  let gpuRenderer = 'unknown';
 
   if (gl) {
     // Get max texture size
@@ -104,13 +132,65 @@ export function detectDeviceCapabilities(): DeviceCapabilities {
       webglVersion = 2;
     }
 
-    // Estimate GPU tier based on max texture size and WebGL version
-    if (maxTextureSize >= 16384 && webglVersion === 2) {
-      gpuTier = 3; // High-end
-    } else if (maxTextureSize >= 8192) {
-      gpuTier = 2; // Mid-range
-    } else {
-      gpuTier = 1; // Low-end
+    // Get GPU info via debug extension for accurate tier detection
+    const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+    if (debugInfo) {
+      gpuVendor = (gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL) as string) || 'unknown';
+      gpuRenderer = (gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) as string) || 'unknown';
+    }
+
+    // Enhanced GPU tier detection based on renderer string
+    const rendererLower = gpuRenderer.toLowerCase();
+
+    // High-end: Discrete GPUs and Apple Silicon
+    if (
+      rendererLower.includes('nvidia') ||
+      rendererLower.includes('radeon') ||
+      rendererLower.includes('geforce') ||
+      rendererLower.includes('rtx') ||
+      rendererLower.includes('gtx') ||
+      rendererLower.includes('rx 5') ||
+      rendererLower.includes('rx 6') ||
+      rendererLower.includes('rx 7') ||
+      (rendererLower.includes('apple') && rendererLower.includes('m1')) ||
+      (rendererLower.includes('apple') && rendererLower.includes('m2')) ||
+      (rendererLower.includes('apple') && rendererLower.includes('m3')) ||
+      (rendererLower.includes('apple') && rendererLower.includes('m4'))
+    ) {
+      gpuTier = 3;
+    }
+    // Low-end: Intel integrated, low-tier Mali, old Adreno
+    else if (
+      rendererLower.includes('intel') ||
+      rendererLower.includes('mali-4') ||
+      rendererLower.includes('mali-t') ||
+      rendererLower.includes('adreno 3') ||
+      rendererLower.includes('adreno 4') ||
+      rendererLower.includes('adreno 5') ||
+      rendererLower.includes('powervr') ||
+      rendererLower.includes('videocore')
+    ) {
+      gpuTier = 1;
+    }
+    // Mid-range: Everything else (modern integrated, mid-tier mobile)
+    else {
+      gpuTier = 2;
+    }
+
+    // Fallback: Use texture size if renderer detection failed
+    if (gpuRenderer === 'unknown') {
+      if (maxTextureSize >= 16384 && webglVersion === 2) {
+        gpuTier = 3;
+      } else if (maxTextureSize >= 8192) {
+        gpuTier = 2;
+      } else {
+        gpuTier = 1;
+      }
+    }
+
+    // Bonus for very high texture support
+    if (maxTextureSize >= 16384 && webglVersion === 2 && gpuTier < 3) {
+      gpuTier = Math.min(gpuTier + 1, 3);
     }
   }
 
@@ -120,6 +200,8 @@ export function detectDeviceCapabilities(): DeviceCapabilities {
     maxTextureSize,
     webglVersion,
     availableMemory: getMemoryUsage(),
+    gpuVendor,
+    gpuRenderer,
   };
 }
 
@@ -366,16 +448,69 @@ export function prefersReducedMotion(): boolean {
 }
 
 /**
- * Detect low power mode (Safari)
+ * Detect low power mode synchronously (basic check)
+ * For full battery check, use isLowPowerModeAsync
  */
 export function isLowPowerMode(): boolean {
-  // @ts-expect-error - battery API not fully typed
-  if (navigator.getBattery) {
-    // Battery API available - could check battery level
-    // For now, just return false
-    return false;
+  // Check for reduced motion as a proxy for power saving
+  if (prefersReducedMotion()) {
+    return true;
   }
   return false;
+}
+
+/**
+ * Detect low power mode asynchronously with Battery API
+ * Returns true if battery < 20% and not charging, or if reduced motion is preferred
+ */
+export async function isLowPowerModeAsync(): Promise<boolean> {
+  // Check for reduced motion preference
+  if (prefersReducedMotion()) {
+    return true;
+  }
+
+  try {
+    // @ts-expect-error - Battery API not fully typed
+    if (navigator.getBattery) {
+      // @ts-expect-error
+      const battery = await navigator.getBattery();
+
+      // Low power if battery < 20% and not charging
+      if (battery.level < 0.2 && !battery.charging) {
+        return true;
+      }
+
+      // Also consider very low battery (< 10%) regardless of charging
+      if (battery.level < 0.1) {
+        return true;
+      }
+    }
+  } catch {
+    // Battery API not available or failed
+  }
+
+  return false;
+}
+
+/**
+ * Get quality settings with power-aware adjustments
+ */
+export async function getQualitySettingsAsync(
+  capabilities: DeviceCapabilities
+): Promise<QualitySettings> {
+  const baseSettings = getQualitySettings(capabilities);
+
+  const lowPower = await isLowPowerModeAsync();
+  if (lowPower) {
+    return {
+      ...baseSettings,
+      particleMultiplier: Math.min(baseSettings.particleMultiplier, 0.5),
+      enablePostProcessing: false,
+      renderScale: Math.min(baseSettings.renderScale, 0.75),
+    };
+  }
+
+  return baseSettings;
 }
 
 /**

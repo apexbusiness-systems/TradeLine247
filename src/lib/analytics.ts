@@ -11,32 +11,77 @@ const POSTHOG_HOST = import.meta.env.VITE_POSTHOG_HOST || 'https://app.posthog.c
 
 let isInitialized = false;
 
+// Storage key for analytics preference
+const ANALYTICS_ENABLED_KEY = 'aspiral_analytics_enabled';
+
+/**
+ * Check if user has opted out of analytics
+ */
+export function isAnalyticsEnabled(): boolean {
+  try {
+    return localStorage.getItem(ANALYTICS_ENABLED_KEY) !== 'false';
+  } catch {
+    return true; // Default to enabled if localStorage unavailable
+  }
+}
+
+/**
+ * Set analytics enabled/disabled state
+ * Respects user preference and persists across sessions
+ */
+export function setAnalyticsEnabled(enabled: boolean): void {
+  try {
+    localStorage.setItem(ANALYTICS_ENABLED_KEY, enabled ? 'true' : 'false');
+
+    if (isInitialized) {
+      if (enabled) {
+        posthog.opt_in_capturing();
+        console.log('[Analytics] User opted in to analytics');
+      } else {
+        posthog.opt_out_capturing();
+        console.log('[Analytics] User opted out of analytics');
+      }
+    }
+  } catch (error) {
+    console.error('[Analytics] Failed to set analytics preference:', error);
+  }
+}
+
 /**
  * Initialize PostHog analytics
  * Safe to call multiple times - will only initialize once
+ * Respects user opt-out preference
  */
 export function initAnalytics() {
   if (isInitialized || !POSTHOG_KEY) {
     return;
   }
 
+  // Check user preference
+  const userOptedOut = !isAnalyticsEnabled();
+
   try {
     posthog.init(POSTHOG_KEY, {
       api_host: POSTHOG_HOST,
       autocapture: false, // Manual tracking only
-      capture_pageview: true,
-      capture_pageleave: true,
-      disable_session_recording: false,
+      capture_pageview: !userOptedOut,
+      capture_pageleave: !userOptedOut,
+      disable_session_recording: userOptedOut,
       session_recording: {
         maskAllInputs: true, // Privacy-first
         maskTextSelector: undefined,
       },
       persistence: 'localStorage',
-      opt_out_capturing_by_default: false,
+      opt_out_capturing_by_default: userOptedOut,
     });
 
     isInitialized = true;
-    console.log('[Analytics] PostHog initialized');
+
+    if (userOptedOut) {
+      console.log('[Analytics] PostHog initialized (user opted out)');
+    } else {
+      console.log('[Analytics] PostHog initialized');
+    }
   } catch (error) {
     console.error('[Analytics] Failed to initialize PostHog:', error);
   }
@@ -287,6 +332,11 @@ export interface CinematicPerformanceMetrics {
   duration: number;
   particleCount: number;
   deviceType: 'desktop' | 'mobile' | 'tablet';
+  // GPU context for debugging performance issues
+  gpuTier?: number;
+  gpuRenderer?: string;
+  qualityMultiplier?: number;
+  wasAdaptiveReduced?: boolean;
 }
 
 /**
@@ -354,6 +404,59 @@ export function trackPerformance(metrics: CinematicPerformanceMetrics) {
 }
 
 // ============================================
+// CINEMATIC ERROR TRACKING
+// ============================================
+
+export type CinematicErrorType =
+  | 'webgl_context_lost'
+  | 'render_error'
+  | 'timeout'
+  | 'audio_error'
+  | 'unknown';
+
+export interface CinematicErrorData {
+  variant: CinematicVariant;
+  errorType: CinematicErrorType;
+  errorMessage?: string;
+  duration?: number;
+  deviceType: 'desktop' | 'mobile' | 'tablet';
+  gpuTier?: number;
+  gpuRenderer?: string;
+  browserInfo?: string;
+}
+
+/**
+ * Track cinematic errors with device context for debugging
+ */
+export function trackCinematicError(data: CinematicErrorData) {
+  if (!isInitialized) initAnalytics();
+
+  try {
+    // Sanitize error message to remove file paths
+    const sanitizedMessage = data.errorMessage
+      ?.replace(/file:\/\/[^\s]+/g, '[path]')
+      ?.replace(/https?:\/\/[^\s]+/g, '[url]')
+      ?.slice(0, 500);
+
+    posthog.capture('cinematic_error', {
+      ...data,
+      errorMessage: sanitizedMessage,
+      browserInfo: data.browserInfo || navigator.userAgent,
+      timestamp: Date.now(),
+    });
+
+    console.error('[Analytics] Cinematic error tracked:', {
+      variant: data.variant,
+      errorType: data.errorType,
+      deviceType: data.deviceType,
+      gpuTier: data.gpuTier,
+    });
+  } catch (error) {
+    console.error('[Analytics] Failed to track cinematic error:', error);
+  }
+}
+
+// ============================================
 // UTILITY FUNCTIONS
 // ============================================
 
@@ -396,7 +499,11 @@ export function getMemoryUsage(): number {
 
 export const analytics = {
   init: initAnalytics,
-  
+
+  // Privacy controls
+  isEnabled: isAnalyticsEnabled,
+  setEnabled: setAnalyticsEnabled,
+
   // Session tracking
   trackSessionStart,
   trackSessionEnd,
@@ -416,7 +523,8 @@ export const analytics = {
   // Cinematic tracking
   trackCinematic,
   trackPerformance,
-  
+  trackCinematicError,
+
   // Utilities
   getDeviceType,
   getMemoryUsage,

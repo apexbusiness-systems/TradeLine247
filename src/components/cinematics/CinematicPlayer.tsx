@@ -27,7 +27,7 @@ import type { MutatedVariant, QualityTier } from '@/lib/breakthrough/types';
 // Utilities
 import { getCinematicConfig, getRandomVariant } from '@/lib/cinematics/configs';
 import { AudioManager } from '@/lib/cinematics/AudioManager';
-import { AdaptiveQuality, prefersReducedMotion, calculateParticleCount, detectDeviceTier } from '@/lib/performance/optimizer';
+import { AdaptiveQuality, prefersReducedMotion, calculateParticleCount, detectDeviceTier, detectDeviceCapabilities } from '@/lib/performance/optimizer';
 import { analytics } from '@/lib/analytics';
 import type { CinematicPlayerProps, CinematicVariant } from '@/lib/cinematics/types';
 
@@ -141,6 +141,7 @@ export function CinematicPlayer({
   const [isPlaying, setIsPlaying] = useState(false);
   const [particleCount, setParticleCount] = useState(config.particles?.count || 1000);
   const [hasCompleted, setHasCompleted] = useState(false);
+  const [webglFailed, setWebglFailed] = useState(false);
   const startTimeRef = useRef<number>(0);
   const fallbackTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [v2Initialized, setV2Initialized] = useState(false);
@@ -164,6 +165,7 @@ export function CinematicPlayer({
     if (enableAnalytics) {
       const duration = performance.now() - startTimeRef.current;
       const metrics = adaptiveQuality.current?.getMetrics();
+      const capabilities = detectDeviceCapabilities();
 
       analytics.trackCinematic('completed', {
         variant: selectedVariant,
@@ -177,6 +179,11 @@ export function CinematicPlayer({
           duration,
           particleCount,
           deviceType: analytics.getDeviceType(),
+          // Enhanced GPU context for debugging
+          gpuTier: capabilities.gpuTier,
+          gpuRenderer: capabilities.gpuRenderer,
+          qualityMultiplier: qualitySettings.particleMultiplier,
+          wasAdaptiveReduced: qualitySettings.particleMultiplier < 1.0,
         });
       }
     }
@@ -184,10 +191,16 @@ export function CinematicPlayer({
     onComplete?.();
   }).current;
 
-  // Handle WebGL/canvas errors - immediately complete
+  // Handle WebGL/canvas errors - show fallback UI then complete
   const handleWebGLError = useRef(() => {
-    console.warn('[CinematicPlayer] WebGL error - skipping to completion');
-    handleComplete();
+    console.warn('[CinematicPlayer] WebGL error - showing fallback UI');
+    setWebglFailed(true);
+    audioManager.current?.stop();
+
+    // Brief delay to show fallback UI before completion
+    setTimeout(() => {
+      handleComplete();
+    }, 1500);
   }).current;
 
   // Initialize V2 if enabled
@@ -410,6 +423,17 @@ export function CinematicPlayer({
           </Suspense>
         </Canvas>
       </WebGLErrorBoundary>
+
+      {/* WebGL Failure Fallback UI */}
+      {webglFailed && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-b from-purple-900/90 to-indigo-900/90 z-10">
+          <div className="text-center animate-pulse">
+            <div className="text-5xl mb-4">✨</div>
+            <div className="text-3xl text-white font-display mb-4">Breakthrough Achieved!</div>
+            <div className="text-lg text-purple-200">Preparing your insight...</div>
+          </div>
+        </div>
+      )}
 
       {/* Skip Button */}
       {allowSkip && isPlaying && (
