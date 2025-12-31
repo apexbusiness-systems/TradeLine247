@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">aSpiral</string>
+    <string name="title_activity_main">aSpiral</string>
+    <string name="package_name">com.apex.aspiral</string>
+    <string name="custom_url_scheme">com.apex.aspiral</string>
+</resources>

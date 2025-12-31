@@ -1,0 +1,252 @@
+workflows:
+  ios-release:
+    name: iOS Release
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+
+    triggering:
+      events:
+        - tag
+      tag_patterns:
+        - pattern: 'ios-v*'
+          include: true
+
+    integrations:
+      app_store_connect: aSpiral_iOS_AppStoreConnect_2025
+
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.apex.aspiral
+      groups:
+        - appstore_credentials
+      vars:
+        BUNDLE_ID: com.apex.aspiral
+        XCODE_WORKSPACE: ios/App/App.xcworkspace
+        XCODE_SCHEME: App
+      node: 20
+      xcode: latest
+      cocoapods: default
+
+    scripts:
+      - name: Install dependencies
+        script: |
+          npm ci
+
+      - name: Build web assets
+        script: |
+          npm run build
+
+      - name: Sync Capacitor
+        script: |
+          npx cap sync ios
+
+      - name: Install CocoaPods
+        script: |
+          cd ios/App && pod install
+
+      - name: Export compliance guardrail
+        script: |
+          echo "Verifying ITSAppUsesNonExemptEncryption..."
+          /usr/libexec/PlistBuddy -c "Print :ITSAppUsesNonExemptEncryption" ios/App/App/Info.plist
+          RESULT=$(/usr/libexec/PlistBuddy -c "Print :ITSAppUsesNonExemptEncryption" ios/App/App/Info.plist)
+          if [ "$RESULT" != "false" ]; then
+            echo "ERROR: ITSAppUsesNonExemptEncryption must be false!"
+            exit 1
+          fi
+          echo "Export compliance verified."
+
+      - name: Set up code signing
+        script: |
+          xcode-project use-profiles
+
+      - name: Build iOS
+        script: |
+          xcode-project build-ipa \
+            --workspace "$XCODE_WORKSPACE" \
+            --scheme "$XCODE_SCHEME" \
+            --config Release
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        beta_groups:
+          - Internal Testers
+      email:
+        recipients:
+          - michael@apexbiz.io
+        notify:
+          success: true
+          failure: true
+
+  android-release:
+    name: Android Release
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+
+    triggering:
+      events:
+        - tag
+      tag_patterns:
+        - pattern: 'android-v*'
+          include: true
+
+    environment:
+      android_signing:
+        - aSpiral_Android_Keystore
+      groups:
+        - google_play_credentials
+      vars:
+        BUNDLE_ID: com.apex.aspiral
+      node: 20
+      java: 17
+
+    scripts:
+      - name: Install dependencies
+        script: |
+          npm ci
+
+      - name: Build web assets
+        script: |
+          npm run build
+
+      - name: Sync Capacitor
+        script: |
+          npx cap sync android
+
+      - name: Set Android version
+        script: |
+          # Extract version from tag (android-v1.0.0 -> 1.0.0)
+          VERSION=${CM_TAG#android-v}
+          MAJOR=$(echo $VERSION | cut -d. -f1)
+          MINOR=$(echo $VERSION | cut -d. -f2)
+          PATCH=$(echo $VERSION | cut -d. -f3)
+          VERSION_CODE=$((MAJOR * 10000 + MINOR * 100 + PATCH))
+
+          echo "Setting version to $VERSION (code: $VERSION_CODE)"
+
+          cd android
+          sed -i.bak "s/versionCode [0-9]*/versionCode $VERSION_CODE/" app/build.gradle
+          sed -i.bak "s/versionName \"[^\"]*\"/versionName \"$VERSION\"/" app/build.gradle
+
+      - name: Build Android AAB
+        script: |
+          cd android
+          ./gradlew bundleRelease
+
+    artifacts:
+      - android/app/build/outputs/**/*.aab
+      - android/app/build/outputs/**/mapping.txt
+
+    publishing:
+      google_play:
+        credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
+        track: internal
+        submit_as_draft: false
+      email:
+        recipients:
+          - michael@apexbiz.io
+        notify:
+          success: true
+          failure: true
+
+  ios-dev:
+    name: iOS Development Build
+    instance_type: mac_mini_m2
+    max_build_duration: 45
+
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: 'develop'
+          include: true
+        - pattern: 'feature/*'
+          include: true
+
+    environment:
+      ios_signing:
+        distribution_type: development
+        bundle_identifier: com.apex.aspiral
+      vars:
+        BUNDLE_ID: com.apex.aspiral
+        XCODE_WORKSPACE: ios/App/App.xcworkspace
+        XCODE_SCHEME: App
+      node: 20
+      xcode: latest
+      cocoapods: default
+
+    scripts:
+      - name: Install dependencies
+        script: |
+          npm ci
+
+      - name: Build web assets
+        script: |
+          npm run build
+
+      - name: Sync Capacitor
+        script: |
+          npx cap sync ios
+
+      - name: Install CocoaPods
+        script: |
+          cd ios/App && pod install
+
+      - name: Build iOS (Debug)
+        script: |
+          xcode-project build-ipa \
+            --workspace "$XCODE_WORKSPACE" \
+            --scheme "$XCODE_SCHEME" \
+            --config Debug
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+
+  android-dev:
+    name: Android Development Build
+    instance_type: mac_mini_m2
+    max_build_duration: 30
+
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: 'develop'
+          include: true
+        - pattern: 'feature/*'
+          include: true
+
+    environment:
+      vars:
+        BUNDLE_ID: com.apex.aspiral
+      node: 20
+      java: 17
+
+    scripts:
+      - name: Install dependencies
+        script: |
+          npm ci
+
+      - name: Build web assets
+        script: |
+          npm run build
+
+      - name: Sync Capacitor
+        script: |
+          npx cap sync android
+
+      - name: Build Android APK (Debug)
+        script: |
+          cd android
+          ./gradlew assembleDebug
+
+    artifacts:
+      - android/app/build/outputs/**/*.apk

@@ -1,18 +1,53 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'app.lovable.4035fec3baf74e84a1437c695f1090e2',
-  appName: 'aspiral-ai',
+  appId: 'com.apex.aspiral',
+  appName: 'aSpiral',
   webDir: 'dist',
+
+  // Server configuration
   server: {
-    url: 'https://4035fec3-baf7-4e84-a143-7c695f1090e2.lovableproject.com?forceHideBadge=true',
-    cleartext: true,
+    androidScheme: 'https',
+    iosScheme: 'https',
+    allowNavigation: ['*.apexbiz.io', '*.supabase.co']
   },
+
+  // iOS-specific
+  ios: {
+    contentInset: 'automatic',
+    preferredContentMode: 'mobile',
+    scheme: 'aSpiral'
+  },
+
+  // Android-specific (WebGL/Three.js optimizations)
+  android: {
+    allowMixedContent: false,
+    webContentsDebuggingEnabled: false // Set true for dev builds
+  },
+
+  // Plugins
   plugins: {
-    PushNotifications: {
-      presentationOptions: ['badge', 'sound', 'alert'],
+    SplashScreen: {
+      launchShowDuration: 2000,
+      launchAutoHide: true,
+      backgroundColor: '#4a1a6b',
+      androidScaleType: 'CENTER_CROP',
+      showSpinner: false,
+      splashFullScreen: true,
+      splashImmersive: true
     },
-  },
+    Keyboard: {
+      resize: 'body',
+      resizeOnFullScreen: true
+    },
+    StatusBar: {
+      style: 'dark',
+      backgroundColor: '#4a1a6b'
+    },
+    PushNotifications: {
+      presentationOptions: ['badge', 'sound', 'alert']
+    }
+  }
 };
 
 export default config;
