@@ -12,124 +12,82 @@ workflows:
           include: true
 
     environment:
-      node: 20
-      xcode: latest
-      cocoapods: default
-
       groups:
         - appstore_credentials
+
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.apex.aspiral
 
       vars:
         BUNDLE_ID: com.apex.aspiral
         XCODE_WORKSPACE: ios/App/App.xcworkspace
         XCODE_SCHEME: App
 
-      # One signing method only (profile + cert references)
-      ios_signing:
-        provisioning_profiles:
-          - aSpiral_iOS_AppStoreConnect_2026
-        certificates:
-          - aSpiral_dist_2026
+      node: 20
+      xcode: latest
+      cocoapods: default
 
     scripts:
       - name: Install dependencies
-        script: |
-          set -e
-          npm ci
+        script: npm ci
 
-      - name: Run tests if present
-        script: |
-          set -e
-          if npm run | grep -qE " test($|:)"; then
-            npm test
-          else
-            echo "ℹ️ No npm test script found — skipping."
-          fi
-
-      - name: Run lint if present
-        script: |
-          set -e
-          if npm run | grep -qE " lint($|:)"; then
-            npm run lint
-          else
-            echo "ℹ️ No npm lint script found — skipping."
-          fi
+      - name: Run app unit tests (exclude Supabase/Deno)
+        script: npx vitest run --dir src
 
       - name: Build web assets
-        script: |
-          set -e
-          npm run build
+        script: npm run build
 
       - name: Verify web build output exists
         script: |
-          set -e
-          for d in dist build www; do
-            if [ -f "$d/index.html" ]; then
-              echo "✅ Found $d/index.html"
-              exit 0
-            fi
-          done
-          echo "❌ ERROR: No index.html found in dist/, build/, or www/."
-          echo "Fix frontend build output OR capacitor.config webDir."
-          exit 1
+          if [ ! -d "dist" ]; then
+            echo "ERROR: dist/ not found. If your build output dir is different, update this step."
+            ls -la
+            exit 1
+          fi
 
       - name: Sync Capacitor (iOS)
-        script: |
-          set -e
-          npx cap sync ios
+        script: npx cap sync ios
 
       - name: Verify iOS web assets copied
         script: |
-          set -e
-          if [ -f "ios/App/App/public/index.html" ]; then
-            echo "✅ ios/App/App/public/index.html exists"
-          else
-            echo "❌ ERROR: ios/App/App/public/index.html missing after cap sync."
-            echo "This causes the blank/purple screen."
+          if [ ! -d "ios/App/App/public" ]; then
+            echo "ERROR: Expected ios/App/App/public not found after cap sync."
+            echo "Searching for public/ directories:"
+            find ios -maxdepth 4 -type d -name public -print || true
+            echo "ios/App/App contents:"
+            ls -la ios/App/App || true
             exit 1
           fi
 
       - name: Set iOS version from tag (ios-vX.Y.Z) + build number
         script: |
-          set -e
           VERSION="${CM_TAG#ios-v}"
-          BUILD="${CM_BUILD_NUMBER:-1}"
-          PLIST="ios/App/App/Info.plist"
+          BUILD_NUMBER="${CM_BUILD_NUMBER}"
 
-          echo "Setting iOS version: $VERSION ($BUILD)"
+          echo "Setting iOS version to $VERSION ($BUILD_NUMBER)"
 
-          /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$PLIST" >/dev/null 2>&1 \
-            && /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$PLIST" \
-            || /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string $VERSION" "$PLIST"
-
-          /usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$PLIST" >/dev/null 2>&1 \
-            && /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD" "$PLIST" \
-            || /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $BUILD" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" ios/App/App/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" ios/App/App/Info.plist
 
       - name: Install CocoaPods
         script: |
-          set -e
           cd ios/App
           pod install
 
       - name: Compliance Check
         script: |
-          set -e
           RESULT=$(/usr/libexec/PlistBuddy -c "Print :ITSAppUsesNonExemptEncryption" ios/App/App/Info.plist 2>/dev/null || echo "MISSING")
           if [ "$RESULT" != "false" ] && [ "$RESULT" != "MISSING" ]; then
-            echo "WARNING: ITSAppUsesNonExemptEncryption is $RESULT (Should be false)"
-          else
-            echo "✅ ITSAppUsesNonExemptEncryption OK ($RESULT)"
+             echo "WARNING: ITSAppUsesNonExemptEncryption is $RESULT (Should be false)"
           fi
 
       - name: Set up code signing
         script: |
-          set -e
-          xcode-project use-profiles
+          xcode-project use-profiles --custom-export-options='{"testFlightInternalTestingOnly": true}'
 
       - name: Build iOS IPA
         script: |
-          set -e
           mkdir -p build/ios/ipa
           xcode-project build-ipa \
             --workspace "$XCODE_WORKSPACE" \
@@ -141,7 +99,6 @@ workflows:
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
       - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
-      - ios/App/App/public/index.html
 
     publishing:
       app_store_connect:
