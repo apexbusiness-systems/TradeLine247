@@ -11,9 +11,6 @@ workflows:
         - pattern: "ios-v*"
           include: true
 
-    integrations:
-      app_store_connect: aSpiral_iOS_AppStoreConnect_2026
-
     environment:
       node: 20
       xcode: latest
@@ -27,6 +24,7 @@ workflows:
         XCODE_WORKSPACE: ios/App/App.xcworkspace
         XCODE_SCHEME: App
 
+      # One signing method only (profile + cert references)
       ios_signing:
         provisioning_profiles:
           - aSpiral_iOS_AppStoreConnect_2026
@@ -38,6 +36,24 @@ workflows:
         script: |
           set -e
           npm ci
+
+      - name: Run tests if present
+        script: |
+          set -e
+          if npm run | grep -qE " test($|:)"; then
+            npm test
+          else
+            echo "ℹ️ No npm test script found — skipping."
+          fi
+
+      - name: Run lint if present
+        script: |
+          set -e
+          if npm run | grep -qE " lint($|:)"; then
+            npm run lint
+          else
+            echo "ℹ️ No npm lint script found — skipping."
+          fi
 
       - name: Build web assets
         script: |
@@ -72,6 +88,23 @@ workflows:
             echo "This causes the blank/purple screen."
             exit 1
           fi
+
+      - name: Set iOS version from tag (ios-vX.Y.Z) + build number
+        script: |
+          set -e
+          VERSION="${CM_TAG#ios-v}"
+          BUILD="${CM_BUILD_NUMBER:-1}"
+          PLIST="ios/App/App/Info.plist"
+
+          echo "Setting iOS version: $VERSION ($BUILD)"
+
+          /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$PLIST" >/dev/null 2>&1 \
+            && /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$PLIST" \
+            || /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string $VERSION" "$PLIST"
+
+          /usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$PLIST" >/dev/null 2>&1 \
+            && /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD" "$PLIST" \
+            || /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $BUILD" "$PLIST"
 
       - name: Install CocoaPods
         script: |
@@ -108,10 +141,13 @@ workflows:
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
       - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+      - ios/App/App/public/index.html
 
     publishing:
       app_store_connect:
-        auth: integration
+        api_key: $APP_STORE_CONNECT_PRIVATE_KEY
+        key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
+        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
         submit_to_testflight: true
         beta_groups:
           - Internal Testers
