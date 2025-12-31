@@ -1,70 +1,130 @@
+definitions:
+  instance_m2: &instance_m2
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+
+  node_env: &node_env
+    node: 20
+
 workflows:
   ios-release:
     name: iOS Release
-    instance_type: mac_mini_m2
-    max_build_duration: 60
+    <<: *instance_m2
     triggering:
       events:
         - tag
       tag_patterns:
-        - pattern: 'ios-v*'
+        - pattern: "ios-v*"
           include: true
+
     integrations:
       app_store_connect: aSpiral_iOS_AppStoreConnect_2026
+
     environment:
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.apex.aspiral
-        provisioning_profiles:
-          - aSpiral_iOS_AppStoreConnect_2026
-        certificates:
-          - aSpiral_dist_2026
+      <<: *node_env
+      xcode: latest
+      cocoapods: default
+
       groups:
         - appstore_credentials
+
       vars:
         BUNDLE_ID: com.apex.aspiral
         XCODE_WORKSPACE: ios/App/App.xcworkspace
         XCODE_SCHEME: App
-      node: 20
-      xcode: latest
-      cocoapods: default
+
+      # IMPORTANT: Choose ONE signing method.
+      # This workflow uses profile/cert references (no distribution_type/bundle_identifier here).
+      ios_signing:
+        provisioning_profiles:
+          - aSpiral_iOS_AppStoreConnect_2026
+        certificates:
+          - aSpiral_dist_2026
+
     scripts:
       - name: Install dependencies
-        script: npm ci
+        script: |
+          set -e
+          npm ci
+
       - name: Build web assets
-        script: npm run build
-      - name: Sync Capacitor
-        script: npx cap sync ios
+        script: |
+          set -e
+          npm run build
+
+      - name: Verify web build output exists
+        script: |
+          set -e
+          for d in dist build www; do
+            if [ -f "$d/index.html" ]; then
+              echo "✅ Found $d/index.html"
+              exit 0
+            fi
+          done
+          echo "❌ ERROR: Could not find index.html in dist/, build/, or www/."
+          echo "Fix your frontend build output folder OR capacitor.config webDir."
+          exit 1
+
+      - name: Sync Capacitor (iOS)
+        script: |
+          set -e
+          npx cap sync ios
+
+      - name: Verify iOS web assets copied
+        script: |
+          set -e
+          if [ -f "ios/App/App/public/index.html" ]; then
+            echo "✅ ios/App/App/public/index.html exists"
+          else
+            echo "❌ ERROR: ios/App/App/public/index.html missing after cap sync."
+            echo "This will produce a blank/purple screen."
+            echo "Check capacitor.config.* webDir matches your build output."
+            exit 1
+          fi
+
       - name: Install CocoaPods
         script: |
+          set -e
           cd ios/App
           pod install
+
       - name: Compliance Check
         script: |
+          set -e
           RESULT=$(/usr/libexec/PlistBuddy -c "Print :ITSAppUsesNonExemptEncryption" ios/App/App/Info.plist 2>/dev/null || echo "MISSING")
           if [ "$RESULT" != "false" ] && [ "$RESULT" != "MISSING" ]; then
-             echo "WARNING: ITSAppUsesNonExemptEncryption is $RESULT (Should be false)"
+            echo "WARNING: ITSAppUsesNonExemptEncryption is $RESULT (Should be false)"
+          else
+            echo "✅ ITSAppUsesNonExemptEncryption OK ($RESULT)"
           fi
+
       - name: Set up code signing
-        script: xcode-project use-profiles
+        script: |
+          set -e
+          xcode-project use-profiles
+
       - name: Build iOS IPA
         script: |
+          set -e
           mkdir -p build/ios/ipa
           xcode-project build-ipa \
             --workspace "$XCODE_WORKSPACE" \
             --scheme "$XCODE_SCHEME" \
             --config Release \
             --ipa-path build/ios/ipa/aSpiral.ipa
+
     artifacts:
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
       - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+
     publishing:
       app_store_connect:
         auth: integration
         submit_to_testflight: true
         beta_groups:
           - Internal Testers
+
       email:
         recipients:
           - michael@apexbiz.io
@@ -74,32 +134,69 @@ workflows:
 
   android-release:
     name: Android Release
-    instance_type: mac_mini_m2
-    max_build_duration: 60
+    <<: *instance_m2
     triggering:
       events:
         - tag
       tag_patterns:
-        - pattern: 'android-v*'
+        - pattern: "android-v*"
           include: true
+
     environment:
-      android_signing:
-        - aSpiral_Android_Keystore
+      <<: *node_env
+      java: 17
+
       groups:
         - google_play_credentials
+
       vars:
         BUNDLE_ID: com.apex.aspiral
-      node: 20
-      java: 17
+
+      android_signing:
+        - aSpiral_Android_Keystore
+
     scripts:
       - name: Install dependencies
-        script: npm ci
+        script: |
+          set -e
+          npm ci
+
       - name: Build web assets
-        script: npm run build
-      - name: Sync Capacitor
-        script: npx cap sync android
+        script: |
+          set -e
+          npm run build
+
+      - name: Verify web build output exists
+        script: |
+          set -e
+          for d in dist build www; do
+            if [ -f "$d/index.html" ]; then
+              echo "✅ Found $d/index.html"
+              exit 0
+            fi
+          done
+          echo "❌ ERROR: Could not find index.html in dist/, build/, or www/."
+          exit 1
+
+      - name: Sync Capacitor (Android)
+        script: |
+          set -e
+          npx cap sync android
+
+      - name: Verify Android web assets copied
+        script: |
+          set -e
+          if [ -f "android/app/src/main/assets/public/index.html" ]; then
+            echo "✅ android/app/src/main/assets/public/index.html exists"
+          else
+            echo "❌ ERROR: android/app/src/main/assets/public/index.html missing after cap sync."
+            echo "This will produce a blank/purple screen."
+            exit 1
+          fi
+
       - name: Set Android version
         script: |
+          set -e
           VERSION=${CM_TAG#android-v}
           MAJOR=$(echo $VERSION | cut -d. -f1)
           MINOR=$(echo $VERSION | cut -d. -f2)
@@ -112,18 +209,23 @@ workflows:
           cd android
           sed -i.bak "s/versionCode [0-9]*/versionCode $VERSION_CODE/" app/build.gradle
           sed -i.bak "s/versionName \"[^\"]*\"/versionName \"$VERSION\"/" app/build.gradle
+
       - name: Build Android AAB
         script: |
+          set -e
           cd android
           ./gradlew bundleRelease
+
     artifacts:
       - android/app/build/outputs/**/*.aab
       - android/app/build/outputs/**/mapping.txt
+
     publishing:
       google_play:
         credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
         track: internal
         submit_as_draft: false
+
       email:
         recipients:
           - michael@apexbiz.io
