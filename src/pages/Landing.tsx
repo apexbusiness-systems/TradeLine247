@@ -467,13 +467,13 @@ const Landing = () => {
                   custom={index * 0.1}
                 >
                   {/* Step Number */}
-                  <div className="absolute -top-4 left-8 w-10 h-10 rounded-full bg-primary/20 border-2 border-primary/40 flex items-center justify-center text-base font-bold text-primary group-hover:bg-primary/30 group-hover:border-primary/60 transition-all duration-300">
+                  <div className="absolute -top-4 left-8 w-10 h-10 rounded-full bg-primary/20 border-2 border-primary/40 flex items-center justify-center text-base font-bold text-primary group-hover:bg-primary/30 group-hover:border-primary/60 group-hover:scale-110 group-hover:-translate-y-0.5 transition-all duration-300">
                     {item.step}
                   </div>
                   
-                  {/* Icon */}
+                  {/* Icon with glow effect */}
                   <motion.div 
-                    className="mb-6 pt-4"
+                    className="mb-6 pt-4 relative"
                     whileHover={{ 
                       scale: 1.1, 
                       rotate: 3,
@@ -485,12 +485,14 @@ const Landing = () => {
                       damping: 12
                     }}
                   >
+                    {/* Pulsing glow background */}
+                    <div className="absolute inset-0 -m-2 rounded-full bg-primary/0 group-hover:bg-primary/20 blur-xl group-hover:animate-pulse transition-all duration-500" />
                     <img 
                       src={item.customIcon} 
                       alt={item.title} 
                       loading="lazy"
                       decoding="async"
-                      className="w-14 h-14 lg:w-16 lg:h-16 opacity-90 group-hover:opacity-100 transition-opacity drop-shadow-md group-hover:drop-shadow-lg" 
+                      className="relative w-14 h-14 lg:w-16 lg:h-16 opacity-90 group-hover:opacity-100 transition-opacity drop-shadow-md group-hover:drop-shadow-lg" 
                     />
                   </motion.div>
                   
