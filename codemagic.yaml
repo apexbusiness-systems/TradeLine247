@@ -34,13 +34,20 @@ workflows:
       tag_patterns:
         - pattern: 'ios-v*'
           include: true
+
     environment:
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.apex.aspiral
+        provisioning_profiles:
+          - aSpiral_iOS_AppStoreConnect_2026
+        certificates:
+          - aSpiral_dist_2026
       groups:
         - appstore_credentials
+        - ios_credentials
       vars:
+        APP_STORE_CONNECT_API_KEY_2: $APP_STORE_CONNECT_PRIVATE_KEY
         BUNDLE_ID: com.apex.aspiral
         XCODE_WORKSPACE: ios/App/App.xcworkspace
         XCODE_SCHEME: App
@@ -109,6 +116,9 @@ workflows:
     publishing:
       app_store_connect:
         auth: api_key
+        api_key: $APP_STORE_CONNECT_API_KEY_2
+        key_id: $APP_STORE_CONNECT_KEY_ID
+        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
         submit_to_testflight: true
         submit_to_app_store: false
       email:
@@ -117,3 +127,175 @@ workflows:
         notify:
           success: true
           failure: true
+
+  android-release:
+    name: Android Release
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+
+    triggering:
+      events:
+        - tag
+      tag_patterns:
+        - pattern: 'android-v*'
+          include: true
+
+    environment:
+      android_signing:
+        - aSpiral_Android_Keystore
+      groups:
+        - google_play_credentials
+      vars:
+        BUNDLE_ID: com.apex.aspiral
+      node: 20
+      java: 17
+
+    scripts:
+      - name: Install dependencies
+        script: |
+          npm ci
+
+      - name: Build web assets
+        script: |
+          npm run build
+
+      - name: Sync Capacitor
+        script: |
+          npx cap sync android
+
+      - name: Set Android version
+        script: |
+          # Extract version from tag (android-v1.0.0 -> 1.0.0)
+          VERSION=${CM_TAG#android-v}
+          MAJOR=$(echo $VERSION | cut -d. -f1)
+          MINOR=$(echo $VERSION | cut -d. -f2)
+          PATCH=$(echo $VERSION | cut -d. -f3)
+          VERSION_CODE=$((MAJOR * 10000 + MINOR * 100 + PATCH))
+
+          echo "Setting version to $VERSION (code: $VERSION_CODE)"
+
+          cd android
+          sed -i.bak "s/versionCode [0-9]*/versionCode $VERSION_CODE/" app/build.gradle
+          sed -i.bak "s/versionName \"[^\"]*\"/versionName \"$VERSION\"/" app/build.gradle
+
+      - name: Build Android AAB
+        script: |
+          cd android
+          ./gradlew bundleRelease
+
+    artifacts:
+      - android/app/build/outputs/**/*.aab
+      - android/app/build/outputs/**/mapping.txt
+
+    publishing:
+      google_play:
+        credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
+        track: internal
+        submit_as_draft: false
+      email:
+        recipients:
+          - michael@apexbiz.io
+        notify:
+          success: true
+          failure: true
+
+  ios-dev:
+    name: iOS Development Build
+    instance_type: mac_mini_m2
+    max_build_duration: 45
+
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: 'develop'
+          include: true
+        - pattern: 'feature/*'
+          include: true
+
+    environment:
+      ios_signing:
+        distribution_type: development
+        bundle_identifier: com.apex.aspiral
+        provisioning_profiles:
+          - aSpiral_iOS_Dev_2026
+        certificates:
+          - aSpiral_Dev_2026
+      groups:
+        - ios_credentials
+      vars:
+        BUNDLE_ID: com.apex.aspiral
+        XCODE_WORKSPACE: ios/App/App.xcworkspace
+        XCODE_SCHEME: App
+      node: 20
+      xcode: latest
+      cocoapods: default
+
+    scripts:
+      - name: Install dependencies
+        script: |
+          npm ci
+
+      - name: Build web assets
+        script: |
+          npm run build
+
+      - name: Sync Capacitor
+        script: |
+          npx cap sync ios
+
+      - name: Install CocoaPods
+        script: |
+          cd ios/App && pod install
+
+      - name: Build iOS (Debug)
+        script: |
+          xcode-project build-ipa \
+            --workspace "$XCODE_WORKSPACE" \
+            --scheme "$XCODE_SCHEME" \
+            --config Debug
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+
+  android-dev:
+    name: Android Development Build
+    instance_type: mac_mini_m2
+    max_build_duration: 30
+
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: 'develop'
+          include: true
+        - pattern: 'feature/*'
+          include: true
+
+    environment:
+      vars:
+        BUNDLE_ID: com.apex.aspiral
+      node: 20
+      java: 17
+
+    scripts:
+      - name: Install dependencies
+        script: |
+          npm ci
+
+      - name: Build web assets
+        script: |
+          npm run build
+
+      - name: Sync Capacitor
+        script: |
+          npx cap sync android
+
+      - name: Build Android APK (Debug)
+        script: |
+          cd android
+          ./gradlew assembleDebug
+
+    artifacts:
+      - android/app/build/outputs/**/*.apk
