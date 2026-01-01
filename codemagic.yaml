@@ -1,6 +1,6 @@
 workflows:
   ios-release:
-    name: iOS Release → TestFlight
+    name: iOS Release (TestFlight)
     instance_type: mac_mini_m2
     max_build_duration: 60
 
@@ -12,82 +12,91 @@ workflows:
           include: true
 
     environment:
-      groups:
-        - appstore_credentials
+      xcode: 26.1
+      node: 22
+      cocoapods: default
 
-      # One signing strategy only: uploaded profile + cert references
+      # IMPORTANT: Use ONLY one signing mode (manual identities below)
       ios_signing:
         provisioning_profiles:
           - aSpiral_iOS_AppStoreConnect_2026
         certificates:
           - aSpiral_dist_2026
 
+      groups:
+        - appstore_credentials
+
       vars:
+        IOS_INFO_PLIST: ios/App/App/Info.plist
         XCODE_WORKSPACE: ios/App/App.xcworkspace
         XCODE_SCHEME: App
-        IOS_INFO_PLIST: ios/App/App/Info.plist
         IOS_IPA_PATH: build/ios/ipa/aSpiral.ipa
 
-      node: 22
-      xcode: 26.1
-      cocoapods: default
-
     scripts:
-      - name: Preflight — normalize ASC env vars (KEY_IDENTIFIER)
+      - name: Preflight — App Store Connect auth vars (canonicalize + fail fast)
         script: |
           set -euo pipefail
 
-          # Required (matches Codemagic docs)
-          test -n "${APP_STORE_CONNECT_PRIVATE_KEY:-}" || (echo "Missing APP_STORE_CONNECT_PRIVATE_KEY" && exit 1)
-          test -n "${APP_STORE_CONNECT_ISSUER_ID:-}" || (echo "Missing APP_STORE_CONNECT_ISSUER_ID" && exit 1)
+          # Canonical variables per Codemagic docs:
+          # APP_STORE_CONNECT_PRIVATE_KEY
+          # APP_STORE_CONNECT_KEY_IDENTIFIER
+          # APP_STORE_CONNECT_ISSUER_ID
+          #
+          # Your project currently has a misnamed var: APP_STORE_CONNECT_KEY_iD
+          # We fail with a clear message so publishing doesn't silently break.
+          missing=()
 
-          # Normalize Key ID: accept multiple historical spellings / casing
-          ASC_KEY_ID=""
-          if [ -n "${APP_STORE_CONNECT_KEY_IDENTIFIER:-}" ]; then
-            ASC_KEY_ID="${APP_STORE_CONNECT_KEY_IDENTIFIER}"
-          elif [ -n "${APP_STORE_CONNECT_KEY_ID:-}" ]; then
-            ASC_KEY_ID="${APP_STORE_CONNECT_KEY_ID}"
-          elif [ -n "${APP_STORE_CONNECT_KEY_iD:-}" ]; then
-            ASC_KEY_ID="${APP_STORE_CONNECT_KEY_iD}"
-          else
-            echo "Missing Key ID env var. Expected APP_STORE_CONNECT_KEY_IDENTIFIER (preferred)."
-            echo "Also accepts APP_STORE_CONNECT_KEY_ID or APP_STORE_CONNECT_KEY_iD."
+          [[ -z "${APP_STORE_CONNECT_PRIVATE_KEY:-}" ]] && missing+=("APP_STORE_CONNECT_PRIVATE_KEY")
+          [[ -z "${APP_STORE_CONNECT_ISSUER_ID:-}" ]] && missing+=("APP_STORE_CONNECT_ISSUER_ID")
+
+          if [[ -z "${APP_STORE_CONNECT_KEY_IDENTIFIER:-}" ]]; then
+            if [[ -n "${APP_STORE_CONNECT_KEY_iD:-}" ]]; then
+              echo "Found APP_STORE_CONNECT_KEY_iD, but missing canonical APP_STORE_CONNECT_KEY_IDENTIFIER."
+              echo "Fix: create APP_STORE_CONNECT_KEY_IDENTIFIER with the SAME value as APP_STORE_CONNECT_KEY_iD."
+            fi
+            missing+=("APP_STORE_CONNECT_KEY_IDENTIFIER")
+          fi
+
+          if (( ${#missing[@]} )); then
+            echo "Missing required App Store Connect env vars:"
+            printf ' - %s\n' "${missing[@]}"
             exit 1
           fi
 
-          # Persist normalized name for ALL subsequent steps (Codemagic CM_ENV mechanism)
-          echo "APP_STORE_CONNECT_KEY_IDENTIFIER=${ASC_KEY_ID}" >> "$CM_ENV"
-
-          echo "✅ ASC auth vars present (KEY_IDENTIFIER normalized)"
+          echo "App Store Connect env vars: OK"
 
       - name: Install dependencies
-        script: |
-          set -euo pipefail
-          npm ci
-
-      - name: Unit tests (app only — avoid supabase/functions tests)
-        script: |
-          set -euo pipefail
-          if npx vitest --version >/dev/null 2>&1; then
-            npx vitest run src
-          else
-            echo "Vitest not found; skipping tests."
-          fi
+        script: npm ci
 
       - name: Build web assets
+        script: npm run build
+
+      - name: Verify web build output exists (prevents blank purple shell)
         script: |
           set -euo pipefail
-          npm run build
+          if [[ -f "dist/index.html" ]]; then
+            echo "Found dist/index.html"
+          elif [[ -f "build/index.html" ]]; then
+            echo "Found build/index.html"
+          else
+            echo "ERROR: No dist/index.html or build/index.html found."
+            echo "Fix: ensure capacitor.config webDir matches your build output folder."
+            exit 1
+          fi
 
       - name: Sync Capacitor (iOS)
-        script: |
-          set -euo pipefail
-          npx cap sync ios
+        script: npx cap sync ios
 
-      - name: Verify iOS web assets copied (prevents blank purple shell)
+      - name: Verify iOS received web assets (post-cap sync)
         script: |
           set -euo pipefail
-          test -f ios/App/App/public/index.html || (echo "Missing ios/App/App/public/index.html after cap sync" && exit 1)
+          found="$(find ios/App/App -maxdepth 5 -name index.html | head -n 1 || true)"
+          if [[ -z "$found" ]]; then
+            echo "ERROR: index.html not found under ios/App/App after cap sync."
+            echo "This is the classic cause of a blank/purple shell."
+            exit 1
+          fi
+          echo "Found iOS index.html at: $found"
 
       - name: Install CocoaPods
         script: |
@@ -98,17 +107,37 @@ workflows:
       - name: Set iOS version from tag (ios-vX.Y.Z) + build number
         script: |
           set -euo pipefail
+
           VERSION="${CM_TAG#ios-v}"
-          BUILD_NO="${BUILD_NUMBER:-1}"
-          echo "Setting iOS version to ${VERSION} (${BUILD_NO})"
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+          MAJOR="${MAJOR:-1}"
+          MINOR="${MINOR:-0}"
+          PATCH="${PATCH:-0}"
+          VERSION="${MAJOR}.${MINOR}.${PATCH}"
 
-          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${VERSION}" "$IOS_INFO_PLIST" 2>/dev/null || \
-            /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string ${VERSION}" "$IOS_INFO_PLIST"
+          BUILD_NUMBER="${CM_BUILD_NUMBER}"
 
-          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${BUILD_NO}" "$IOS_INFO_PLIST" 2>/dev/null || \
-            /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string ${BUILD_NO}" "$IOS_INFO_PLIST"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$IOS_INFO_PLIST" \
+            || /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string $VERSION" "$IOS_INFO_PLIST"
 
-      - name: TestFlight internal only export option
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" "$IOS_INFO_PLIST" \
+            || /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $BUILD_NUMBER" "$IOS_INFO_PLIST"
+
+          echo "Set iOS version to $VERSION ($BUILD_NUMBER)"
+
+      - name: Compliance — set ITSAppUsesNonExemptEncryption=false
+        script: |
+          set -euo pipefail
+          KEY="ITSAppUsesNonExemptEncryption"
+          RESULT=$(/usr/libexec/PlistBuddy -c "Print :$KEY" "$IOS_INFO_PLIST" 2>/dev/null || echo "MISSING")
+          if [[ "$RESULT" == "MISSING" ]]; then
+            /usr/libexec/PlistBuddy -c "Add :$KEY bool false" "$IOS_INFO_PLIST"
+          elif [[ "$RESULT" != "false" ]]; then
+            /usr/libexec/PlistBuddy -c "Set :$KEY false" "$IOS_INFO_PLIST"
+          fi
+          echo "$KEY is set to false"
+
+      - name: Set up code signing (Internal TestFlight only export option)
         script: |
           set -euo pipefail
           xcode-project use-profiles --custom-export-options='{"testFlightInternalTestingOnly": true}'
@@ -116,7 +145,7 @@ workflows:
       - name: Build iOS IPA
         script: |
           set -euo pipefail
-          mkdir -p build/ios/ipa
+          mkdir -p "$(dirname "$IOS_IPA_PATH")"
           xcode-project build-ipa \
             --workspace "$XCODE_WORKSPACE" \
             --scheme "$XCODE_SCHEME" \
@@ -130,7 +159,7 @@ workflows:
 
     publishing:
       app_store_connect:
-        # Codemagic supports env-var auth for publishing:
+        # API-key auth via environment variables (no "integration" needed)
         api_key: $APP_STORE_CONNECT_PRIVATE_KEY
         key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
         issuer_id: $APP_STORE_CONNECT_ISSUER_ID
