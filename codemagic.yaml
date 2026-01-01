@@ -37,8 +37,6 @@ workflows:
 
     environment:
       ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.apex.aspiral
         provisioning_profiles:
           - aSpiral_iOS_AppStoreConnect_2026
         certificates:
@@ -215,8 +213,6 @@ workflows:
 
     environment:
       ios_signing:
-        distribution_type: development
-        bundle_identifier: com.apex.aspiral
         provisioning_profiles:
           - aSpiral_iOS_Dev_2026
         certificates:
