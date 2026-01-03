@@ -1,7 +1,8 @@
 workflows:
   aspiral_ios_testflight:
-    name: aSpiral iOS → TestFlight (API key, no profile refs)
-    max_build_duration: 120
+    name: aSpiral iOS -> TestFlight (Green Lane)
+    instance_type: mac_mini_m2
+    max_build_duration: 90
 
     environment:
       xcode: 16.4
@@ -10,30 +11,63 @@ workflows:
         - ios_credentials
         - appstore_credentials
       vars:
-        # Defaults (we also auto-detect after cap sync)
-        XCODE_PROJECT: ios/App/App.xcodeproj
-        XCODE_WORKSPACE: ios/App/App.xcworkspace
-        XCODE_SCHEME: App
-        INFO_PLIST_PATH: ios/App/App/Info.plist
+        # Memory headroom for web build
+        NODE_OPTIONS: "--max_old_space_size=8192"
+
+        # Known paths from your repo/logs
+        INFO_PLIST_PATH: "ios/App/App/Info.plist"
+        XCODE_SCHEME: "App"
+
+        # Output
+        IOS_IPA_PATH: "build/ios/ipa/aSpiral.ipa"
 
     scripts:
-      - name: Preflight (fail fast)
-        script: |
-          set -euo pipefail
+      - name: Preflight (fail fast, save money)
+        script: bash -lc 'set -euo pipefail; req=(TEAM_ID BUNDLE_ID CERTIFICATE_PRIVATE_KEY APP_STORE_CONNECT_PRIVATE_KEY APP_STORE_CONNECT_ISSUER_ID APP_STORE_CONNECT_KEY_IDENTIFIER); for v in "${req[@]}"; do if [ -z "${!v:-}" ]; then echo "Missing required env var $v"; exit 1; fi; done; if [ ! -f package.json ]; then echo "package.json missing at repo root"; exit 1; fi; if [ ! -f "$INFO_PLIST_PATH" ]; then echo "Info.plist missing at $INFO_PLIST_PATH"; exit 1; fi; echo "Preflight OK"'
 
-          required_vars=(
-            TEAM_ID
-            BUNDLE_ID
-            CERTIFICATE_PRIVATE_KEY
-            APP_STORE_CONNECT_PRIVATE_KEY
-            APP_STORE_CONNECT_KEY_IDENTIFIER
-            APP_STORE_CONNECT_ISSUER_ID
-          )
+      - name: iOS signing (auto fetch or create)
+        script: bash -lc 'set -euo pipefail; keychain initialize; app-store-connect fetch-signing-files "$BUNDLE_ID" --type IOS_APP_STORE --create; keychain add-certificates; echo "Signing assets ready"'
 
-          for v in "${required_vars[@]}"; do
-            if [[ -z "${!v:-}" ]]; then
-              echo "Missing required env var: ${v}"
-              exit 1
+      - name: Use Node 22 + npm 10 (stable)
+        script: bash -lc 'set -euo pipefail; if ! command -v n >/dev/null 2>&1; then npm install -g n; fi; n 22; hash -r; node -v; npm install -g npm@10; npm -v'
+
+      - name: Install dependencies
+        script: bash -lc 'set -euo pipefail; export NODE_OPTIONS="--max_old_space_size=8192"; npm ci'
+
+      - name: Build web assets
+        script: bash -lc 'set -euo pipefail; export NODE_OPTIONS="--max_old_space_size=8192"; npm run build'
+
+      - name: Capacitor sync iOS
+        script: bash -lc 'set -euo pipefail; npx cap sync ios'
+
+      - name: CocoaPods install
+        script: bash -lc 'set -euo pipefail; cd ios/App; pod install'
+
+      - name: Resolve workspace (after cap sync)
+        script: bash -lc 'set -euo pipefail; if [ -d "ios/App/App.xcworkspace" ]; then echo "XCODE_WORKSPACE=ios/App/App.xcworkspace" >> "$CM_ENV"; elif [ -d "ios/App/App.xcodeproj/project.xcworkspace" ]; then echo "XCODE_WORKSPACE=ios/App/App.xcodeproj/project.xcworkspace" >> "$CM_ENV"; else echo "No iOS workspace found after cap sync"; ls -la ios/App || true; exit 1; fi; echo "Workspace set"'
+
+      - name: Set unique build number (TestFlight safe)
+        script: bash -lc 'set -euo pipefail; BUILD="$(date -u +%Y%m%d%H%M%S)"; /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD" "$INFO_PLIST_PATH" || /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $BUILD" "$INFO_PLIST_PATH"; echo "Build number set"'
+
+      - name: Apply provisioning profiles
+        script: bash -lc 'set -euo pipefail; xcode-project use-profiles --custom-export-options="{\"testFlightInternalTestingOnly\": true}"'
+
+      - name: Build IPA
+        script: bash -lc 'set -euo pipefail; mkdir -p build/ios/ipa; xcode-project build-ipa --workspace "$XCODE_WORKSPACE" --scheme "$XCODE_SCHEME" --config Release --ipa-path "$IOS_IPA_PATH"; test -f "$IOS_IPA_PATH"; echo "IPA created"'
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+
+    publishing:
+      app_store_connect:
+        api_key: $APP_STORE_CONNECT_PRIVATE_KEY
+        key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
+        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
+        submit_to_testflight: true
+        beta_groups:
+          - Internal Testers
             fi
           done
 
