@@ -27,7 +27,7 @@ workflows:
         XCODE_WORKSPACE: "ios/App/App.xcworkspace"
       ios_signing:
         distribution_type: app_store
-        bundle_identifier: "com.apex.aspiral"
+        bundle_identifier: com.apex.aspiral
     
     triggering:
       events:
