@@ -1,6 +1,6 @@
 workflows:
   aspiral_ios_testflight:
-    name: aSpiral iOS → TestFlight
+    name: aSpiral iOS -> TestFlight (Green Next Run)
     instance_type: mac_mini_m2
     max_build_duration: 90
 
@@ -13,22 +13,31 @@ workflows:
         - appstore_credentials
       vars:
         NODE_OPTIONS: "--max_old_space_size=8192"
+
         XCODE_SCHEME: "App"
         XCODE_WORKSPACE: "ios/App/App.xcworkspace"
         XCODE_FALLBACK_WORKSPACE: "ios/App/App.xcodeproj/project.xcworkspace"
         INFO_PLIST_PATH: "ios/App/App/Info.plist"
+
         IPA_PATH: "build/ios/ipa/App.ipa"
 
     scripts:
-      - name: Preflight (fail fast)
+      - name: Preflight (fail fast, normalize Key ID)
         script: |
           set -euo pipefail
+
+          # Accept any one of these, but standardize on KEY_IDENTIFIER
+          KEY="${APP_STORE_CONNECT_KEY_IDENTIFIER:-${APP_STORE_CONNECT_KEY_ID:-${APP_STORE_CONNECT_KEY_iD:-}}}"
+          if [ -z "${KEY}" ]; then
+            echo "Missing App Store Connect Key ID env var (set APP_STORE_CONNECT_KEY_IDENTIFIER)."
+            exit 1
+          fi
+          echo "APP_STORE_CONNECT_KEY_IDENTIFIER=$KEY" >> "$CM_ENV"
 
           required_vars=(
             TEAM_ID
             BUNDLE_ID
             APP_STORE_CONNECT_ISSUER_ID
-            APP_STORE_CONNECT_KEY_ID
             APP_STORE_CONNECT_PRIVATE_KEY
             CERTIFICATE_PRIVATE_KEY
           )
@@ -50,38 +59,22 @@ workflows:
             exit 1
           fi
 
-          echo "✅ Preflight OK"
+          echo "Preflight OK"
 
-      - name: Pin npm
+      - name: Pin npm (matches known-good lane behavior)
         script: |
           set -euo pipefail
           node -v
           npm install -g npm@10
           npm -v
 
-      - name: Initialize keychain + fetch signing
-        script: |
-          set -euo pipefail
-
-          keychain initialize
-
-          app-store-connect fetch-signing-files "$BUNDLE_ID" \
-            --type IOS_APP_STORE \
-            --create \
-            --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
-            --key-id "$APP_STORE_CONNECT_KEY_ID" \
-            --private-key @env:APP_STORE_CONNECT_PRIVATE_KEY \
-            --certificate-key @env:CERTIFICATE_PRIVATE_KEY
-
-          keychain add-certificates
-
-      - name: Install dependencies
+      - name: Install JS deps
         script: |
           set -euo pipefail
           export NODE_OPTIONS="--max_old_space_size=8192"
           npm ci
 
-      - name: Build web assets
+      - name: Build web assets (OOM hardened)
         script: |
           set -euo pipefail
           export NODE_OPTIONS="--max_old_space_size=8192"
@@ -99,7 +92,7 @@ workflows:
           pod install
           cd ../..
 
-      - name: Resolve workspace
+      - name: Resolve workspace (prefer App.xcworkspace after pods)
         script: |
           set -euo pipefail
 
@@ -109,25 +102,43 @@ workflows:
             echo "XCODE_WORKSPACE=$XCODE_FALLBACK_WORKSPACE" >> "$CM_ENV"
             echo "Using fallback workspace: $XCODE_FALLBACK_WORKSPACE"
           else
-            echo "❌ No workspace found. Listing ios/App:"
+            echo "No workspace found. Listing ios/App:"
             ls -la ios/App || true
             exit 1
           fi
 
-      - name: Set build number
+      - name: Set unique build number (TestFlight-safe)
         script: |
           set -euo pipefail
-
           BUILD="$(date -u +%Y%m%d%H%M%S)"
+
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD" "$INFO_PLIST_PATH" \
             || /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $BUILD" "$INFO_PLIST_PATH"
 
           echo "CFBundleVersion set to $BUILD"
 
-      - name: Configure code signing
+      - name: Initialize keychain + fetch/create signing files (explicit flags)
         script: |
           set -euo pipefail
-          xcode-project use-profiles
+
+          keychain initialize
+
+          # Codemagic CLI tools documented pattern
+          app-store-connect fetch-signing-files \
+            --type IOS_APP_STORE \
+            --create \
+            --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
+            --key-id "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
+            --private-key @env:APP_STORE_CONNECT_PRIVATE_KEY \
+            --certificate-key @env:CERTIFICATE_PRIVATE_KEY \
+            "$BUNDLE_ID"
+
+          keychain add-certificates
+
+      - name: Configure code signing (Internal Testing Only)
+        script: |
+          set -euo pipefail
+          xcode-project use-profiles --custom-export-options='{"testFlightInternalTestingOnly": true}'
 
       - name: Build IPA
         script: |
@@ -140,32 +151,11 @@ workflows:
             --config Release \
             --ipa-path "$IPA_PATH"
 
-      - name: Verify IPA
+      - name: Verify IPA exists
         script: |
           set -euo pipefail
-
-          if [ ! -f "$IPA_PATH" ]; then
-            echo "❌ IPA not found at $IPA_PATH"
-            exit 1
-          fi
-
-          TEMP_DIR=$(mktemp -d)
-          unzip -q "$IPA_PATH" -d "$TEMP_DIR"
-
-          PLIST_PATH="$TEMP_DIR/Payload/App.app/Info.plist"
-          if [ ! -f "$PLIST_PATH" ]; then
-            echo "❌ Info.plist not found inside IPA"
-            rm -rf "$TEMP_DIR"
-            exit 1
-          fi
-
-          IPA_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$PLIST_PATH")
-          IPA_BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$PLIST_PATH")
-
-          echo "✅ IPA Version: $IPA_VERSION"
-          echo "✅ IPA Build:   $IPA_BUILD"
-
-          rm -rf "$TEMP_DIR"
+          test -f "$IPA_PATH" || (echo "IPA not found at $IPA_PATH" && exit 1)
+          echo "IPA OK: $IPA_PATH"
 
     artifacts:
       - build/ios/ipa/*.ipa
@@ -175,6 +165,6 @@ workflows:
     publishing:
       app_store_connect:
         api_key: $APP_STORE_CONNECT_PRIVATE_KEY
-        key_id: $APP_STORE_CONNECT_KEY_ID
+        key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
         issuer_id: $APP_STORE_CONNECT_ISSUER_ID
         submit_to_testflight: true
