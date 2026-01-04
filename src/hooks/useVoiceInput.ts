@@ -23,6 +23,9 @@ import { registerSTTController, updateListeningState, isGated } from "@/lib/audi
 import { addBreadcrumb } from "@/lib/debugOverlay";
 import { featureFlags } from "@/lib/featureFlags";
 
+// Audit Fix: Explicit keywords to stop recording
+const STOP_KEYWORDS = ['stop', 'pause', 'end session', 'shut up', 'hold on'];
+
 const logger = createLogger("useVoiceInput");
 
 /**
@@ -129,6 +132,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
   // Refs for lifecycle management
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const isStartedRef = useRef(false); // Idempotent guard
+  const isIntentionalStop = useRef(false); // Audit Fix: Track if user clicked stop
   const interimTranscriptRef = useRef("");
   const lastInterimEmitRef = useRef(0);
   const INTERIM_UPDATE_INTERVAL = 150;
@@ -214,10 +218,16 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
     let newFinalText = "";
     let newInterimText = "";
 
-    // Process only new results from resultIndex
+      // Process only new results from resultIndex
     for (let i = event.resultIndex; i < event.results.length; i++) {
       const result = event.results[i];
       const text = result[0].transcript;
+
+      // Audit Fix: Keyword Detection
+      if (STOP_KEYWORDS.some(keyword => text.toLowerCase().includes(keyword))) {
+        stopRecording();
+        return;
+      }
 
       if (result.isFinal) {
         newFinalText += text;
@@ -301,6 +311,20 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
     };
 
     recognition.onend = () => {
+      // Audit Fix: Intelligent Auto-Restart
+      // Only actually stop if the user explicitly requested it or we are paused
+      if (!isIntentionalStop.current && !isPaused && isStartedRef.current) {
+        logger.debug("Auto-restarting speech recognition (unexpected end)");
+        try {
+           recognition.start();
+        } catch (e) {
+           // Ignore 'already started' errors
+        }
+      } else {
+         // Genuine stop
+         setRecording(false);
+         isStartedRef.current = false;
+      }
       options.onEnd?.();
     };
 
@@ -337,6 +361,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
       setFinalTranscript("");
       emitInterimUpdate("", true);
       interimTranscriptRef.current = "";
+      isIntentionalStop.current = false; // Reset flag
       const recognition = createRecognition({
         onStart: () => {
           setRecording(true);
@@ -393,6 +418,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
   }, [setRecording, setError, options, cleanup, isPaused, emitInterimUpdate, commitInterimAsFinal, voiceEnabled, createRecognition]);
 
   const stopRecording = useCallback(() => {
+    isIntentionalStop.current = true; // Mark as intentional
     emitDebugEvent({ type: 'stt.stop', data: { action: 'user_stop' } });
     commitInterimAsFinal();
     cleanup();
