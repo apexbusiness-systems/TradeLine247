@@ -6,12 +6,12 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { HashRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { I18nextProvider } from 'react-i18next';
-import i18n from '@/lib/i18n/config';
-import { SentinelProvider } from '@/components/SentinelProvider';
+import { I18nextProvider } from "react-i18next";
+import i18n from "@/lib/i18n/config";
+import { SentinelProvider } from "@/components/SentinelProvider";
 import { Analytics } from "@vercel/analytics/react";
 import { DebugOverlay } from "@/components/DebugOverlay";
-import { toast } from "sonner";
+import PwaInstallPrompt from "@/components/PwaInstallPrompt";
 import Landing from "./pages/Landing";
 import HowItWorks from "./pages/HowItWorks";
 import Story from "./pages/Story";
@@ -109,7 +109,7 @@ const App = () => (
           <Toaster />
           <Sonner />
           <Analytics />
-          <PWAUpdateHandler />
+          <PwaInstallPrompt />
           <HashRouter>
             <StandaloneModeRedirect />
             <DebugOverlay />
