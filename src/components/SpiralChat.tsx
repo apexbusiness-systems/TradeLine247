@@ -51,8 +51,10 @@ export const SpiralChat = forwardRef<SpiralChatHandle, SpiralChatProps>((_, ref)
   const [sessionElapsed, setSessionElapsed] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
-
   
+  // CRITICAL FIX: Track last spoken question to prevent "machine gun" audio loop
+  const lastSpokenQuestionRef = useRef<string | null>(null);
+
   // Session persistence
   const { 
     save: saveSession, 
@@ -194,12 +196,27 @@ export const SpiralChat = forwardRef<SpiralChatHandle, SpiralChatProps>((_, ref)
     },
   });
 
-  // Speak AI questions when they arrive (if TTS enabled)
+  // CRITICAL FIX: Prevent TTS loop by tracking last spoken question
+  // Only speak if the question has actually CHANGED since the last time we spoke
   useEffect(() => {
-    if (currentQuestion && ttsEnabled && !isTTSSpeaking && !isTTSLoading) {
+    if (
+      currentQuestion && 
+      ttsEnabled && 
+      !isTTSSpeaking && 
+      !isTTSLoading &&
+      currentQuestion !== lastSpokenQuestionRef.current
+    ) {
+      lastSpokenQuestionRef.current = currentQuestion;
       speakText(currentQuestion);
     }
-  }, [currentQuestion, ttsEnabled, speakText, isTTSSpeaking, isTTSLoading]);
+  }, [currentQuestion, ttsEnabled, isTTSSpeaking, isTTSLoading, speakText]);
+
+  // Reset tracking when question is dismissed or cleared
+  useEffect(() => {
+    if (!currentQuestion) {
+      lastSpokenQuestionRef.current = null;
+    }
+  }, [currentQuestion]);
 
   // Update live transcript display
   useEffect(() => {
@@ -262,7 +279,7 @@ export const SpiralChat = forwardRef<SpiralChatHandle, SpiralChatProps>((_, ref)
     },
   }), [handleMicToggle, trackFeature]);
 
-
+  // Helper to add test data for development
   const addTestEntities = () => {
     const testEntities: Array<{ type: EntityType; label: string }> = [
       { type: "problem", label: "Should I take the job offer?" },
