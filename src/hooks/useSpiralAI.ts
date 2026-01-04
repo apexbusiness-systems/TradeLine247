@@ -143,6 +143,7 @@ export function useSpiralAI(options: UseSpiralAIOptions = {}) {
   const conversationHistoryRef = useRef<string[]>([]);
   const fastTrackRef = useRef<FastTrackState>(createFastTrackState());
   const patternsRef = useRef<Pattern[]>([]);
+  const lastFlushRef = useRef<{ text: string; ts: number } | null>(null);
 
   const {
     currentSession,
@@ -443,6 +444,22 @@ export function useSpiralAI(options: UseSpiralAIOptions = {}) {
           }, 50);
         }
 
+        // FAILSAFE: If readyForBreakthrough but server returned a question, ignore it and force breakthrough
+        if (fastTrackRef.current.readyForBreakthrough && data.question) {
+           logger.warn("Server returned question despite breakthrough ready - forcing breakthrough locally");
+           
+           // Mock a basic breakthrough data if none exists
+           const forcedData: BreakthroughData = {
+               friction: "The tension between your goals and your fears",
+               grease: "Trusting your own intuition",
+               insight: "You already know the answer, you just need to act."
+           };
+           
+           forceBreakthrough(forcedData);
+           sendEvent({ type: "RESPONSE_COMPLETE" }); // Reset FSM
+           return data;
+        }
+
         // Track question and count with anti-repetition + energy matching
         if (data.question) {
           let processedQuestion = data.question;
@@ -642,16 +659,48 @@ export function useSpiralAI(options: UseSpiralAIOptions = {}) {
       const buffer = transcriptBufferRef.current;
       transcriptBufferRef.current = "";
       lastSendTimeRef.current = Date.now();
-      
+
       // Add user message
       addMessage({
         role: "user",
         content: buffer,
       });
-      
+
       processTranscript(buffer);
     }
   }, [machineContext, processTranscript, addMessage]);
+
+  // Flush buffer with optional fallback (prevents stalls when only interim text exists)
+  const flushTranscript = useCallback(
+    (fallbackText?: string) => {
+      if (!canStartProcessing(machineContext)) return;
+
+      const buffered = transcriptBufferRef.current.trim();
+      const fallback = fallbackText?.trim() || "";
+      const text = buffered || fallback;
+      if (!text) return;
+
+      const now = Date.now();
+      const last = lastFlushRef.current;
+      if (last && last.text === text && now - last.ts < 1000) {
+        return;
+      }
+      lastFlushRef.current = { text, ts: now };
+
+      if (buffered) {
+        transcriptBufferRef.current = "";
+      }
+      lastSendTimeRef.current = now;
+
+      addMessage({
+        role: "user",
+        content: text,
+      });
+
+      processTranscript(text);
+    },
+    [machineContext, processTranscript, addMessage]
+  );
 
   // Clear buffer
   const clearBuffer = useCallback(() => {
@@ -698,6 +747,7 @@ export function useSpiralAI(options: UseSpiralAIOptions = {}) {
     processTranscript,
     accumulateTranscript,
     sendBuffer,
+    flushTranscript,
     clearBuffer,
     dismissQuestion,
     skipToBreakthrough,
