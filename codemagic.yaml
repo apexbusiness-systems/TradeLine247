@@ -8,37 +8,40 @@ workflows:
       xcode: 16.4
       node: 22
       cocoapods: default
+
       groups:
         - ios_credentials
         - appstore_credentials
+
       vars:
         NODE_OPTIONS: "--max_old_space_size=8192"
 
         XCODE_SCHEME: "App"
-        XCODE_WORKSPACE: "ios/App/App.xcworkspace"
-        XCODE_FALLBACK_WORKSPACE: "ios/App/App.xcodeproj/project.xcworkspace"
-        INFO_PLIST_PATH: "ios/App/App/Info.plist"
 
+        IOS_PROJECT_PATH: "ios/App/App.xcodeproj"
+        IOS_WORKSPACE_PATH: "ios/App/App.xcworkspace"
+        IOS_FALLBACK_WORKSPACE_PATH: "ios/App/App.xcodeproj/project.xcworkspace"
+
+        INFO_PLIST_PATH: "ios/App/App/Info.plist"
         IPA_PATH: "build/ios/ipa/App.ipa"
 
     scripts:
-      - name: Preflight (fail fast, normalize Key ID)
+      - name: Preflight (fail fast + normalize Key ID)
         script: |
           set -euo pipefail
 
-          # Accept any one of these, but standardize on KEY_IDENTIFIER
-          KEY="${APP_STORE_CONNECT_KEY_IDENTIFIER:-${APP_STORE_CONNECT_KEY_ID:-${APP_STORE_CONNECT_KEY_iD:-}}}"
-          if [ -z "${KEY}" ]; then
-            echo "Missing App Store Connect Key ID env var (set APP_STORE_CONNECT_KEY_IDENTIFIER)."
-            exit 1
+          # Normalize Key ID drift: prefer APP_STORE_CONNECT_KEY_ID, fallback to mis-cased KEY_iD
+          if [ -z "${APP_STORE_CONNECT_KEY_ID:-}" ] && [ -n "${APP_STORE_CONNECT_KEY_iD:-}" ]; then
+            echo "APP_STORE_CONNECT_KEY_ID=${APP_STORE_CONNECT_KEY_iD}" >> "$CM_ENV"
+            export APP_STORE_CONNECT_KEY_ID="${APP_STORE_CONNECT_KEY_iD}"
           fi
-          echo "APP_STORE_CONNECT_KEY_IDENTIFIER=$KEY" >> "$CM_ENV"
 
           required_vars=(
             TEAM_ID
             BUNDLE_ID
             APP_STORE_CONNECT_ISSUER_ID
             APP_STORE_CONNECT_PRIVATE_KEY
+            APP_STORE_CONNECT_KEY_ID
             CERTIFICATE_PRIVATE_KEY
           )
 
@@ -49,17 +52,28 @@ workflows:
             fi
           done
 
-          if [ ! -f "package.json" ]; then
-            echo "package.json missing at repo root"
-            exit 1
-          fi
-
-          if [ ! -f "$INFO_PLIST_PATH" ]; then
-            echo "Info.plist missing at $INFO_PLIST_PATH"
-            exit 1
-          fi
+          test -f package.json || (echo "package.json missing at repo root" && exit 1)
+          test -f "$INFO_PLIST_PATH" || (echo "Info.plist missing at $INFO_PLIST_PATH" && exit 1)
 
           echo "Preflight OK"
+
+      - name: Initialize keychain + fetch/create signing files (fail fast on Apple auth)
+        script: |
+          set -euo pipefail
+
+          keychain initialize
+
+          app-store-connect fetch-signing-files \
+            --type IOS_APP_STORE \
+            --create \
+            --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
+            --key-id "$APP_STORE_CONNECT_KEY_ID" \
+            --private-key @env:APP_STORE_CONNECT_PRIVATE_KEY \
+            --certificate-key @env:CERTIFICATE_PRIVATE_KEY \
+            "$BUNDLE_ID"
+
+          keychain add-certificates
+          echo "Signing assets ready"
 
       - name: Pin npm (matches known-good lane behavior)
         script: |
@@ -85,24 +99,39 @@ workflows:
           set -euo pipefail
           npx cap sync ios
 
-      - name: CocoaPods install
-        script: |
-          set -euo pipefail
-          cd ios/App
-          pod install
-          cd ../..
-
-      - name: Resolve workspace (prefer App.xcworkspace after pods)
+      - name: CocoaPods (ONLY if Podfile exists anywhere under ios/)
         script: |
           set -euo pipefail
 
-          if [ -d "$XCODE_WORKSPACE" ]; then
-            echo "Using workspace: $XCODE_WORKSPACE"
-          elif [ -d "$XCODE_FALLBACK_WORKSPACE" ]; then
-            echo "XCODE_WORKSPACE=$XCODE_FALLBACK_WORKSPACE" >> "$CM_ENV"
-            echo "Using fallback workspace: $XCODE_FALLBACK_WORKSPACE"
+          PODFILE_PATH="$(find ios -maxdepth 4 -name Podfile -print -quit || true)"
+          if [ -n "${PODFILE_PATH}" ]; then
+            POD_DIR="$(dirname "${PODFILE_PATH}")"
+            echo "Podfile found at: ${PODFILE_PATH}"
+            cd "${POD_DIR}"
+            pod install
+            cd "$CM_BUILD_DIR"
           else
-            echo "No workspace found. Listing ios/App:"
+            echo "No Podfile found. Skipping CocoaPods (SPM-based project)."
+          fi
+
+      - name: Resolve iOS build target (workspace vs project) AFTER sync/pods
+        script: |
+          set -euo pipefail
+
+          if [ -d "$IOS_WORKSPACE_PATH" ]; then
+            echo "BUILD_TARGET=workspace" >> "$CM_ENV"
+            echo "XCODE_WORKSPACE=$IOS_WORKSPACE_PATH" >> "$CM_ENV"
+            echo "Using workspace: $IOS_WORKSPACE_PATH"
+          elif [ -d "$IOS_FALLBACK_WORKSPACE_PATH" ]; then
+            echo "BUILD_TARGET=workspace" >> "$CM_ENV"
+            echo "XCODE_WORKSPACE=$IOS_FALLBACK_WORKSPACE_PATH" >> "$CM_ENV"
+            echo "Using fallback workspace: $IOS_FALLBACK_WORKSPACE_PATH"
+          elif [ -d "$IOS_PROJECT_PATH" ]; then
+            echo "BUILD_TARGET=project" >> "$CM_ENV"
+            echo "XCODE_PROJECT=$IOS_PROJECT_PATH" >> "$CM_ENV"
+            echo "Using project: $IOS_PROJECT_PATH"
+          else
+            echo "No workspace or project found. Listing ios/App:"
             ls -la ios/App || true
             exit 1
           fi
@@ -110,30 +139,12 @@ workflows:
       - name: Set unique build number (TestFlight-safe)
         script: |
           set -euo pipefail
-          BUILD="$(date -u +%Y%m%d%H%M%S)"
 
+          BUILD="$(date -u +%Y%m%d%H%M%S)"
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD" "$INFO_PLIST_PATH" \
             || /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $BUILD" "$INFO_PLIST_PATH"
 
           echo "CFBundleVersion set to $BUILD"
-
-      - name: Initialize keychain + fetch/create signing files (explicit flags)
-        script: |
-          set -euo pipefail
-
-          keychain initialize
-
-          # Codemagic CLI tools documented pattern
-          app-store-connect fetch-signing-files \
-            --type IOS_APP_STORE \
-            --create \
-            --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
-            --key-id "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
-            --private-key @env:APP_STORE_CONNECT_PRIVATE_KEY \
-            --certificate-key @env:CERTIFICATE_PRIVATE_KEY \
-            "$BUNDLE_ID"
-
-          keychain add-certificates
 
       - name: Configure code signing (Internal Testing Only)
         script: |
@@ -145,11 +156,19 @@ workflows:
           set -euo pipefail
           mkdir -p build/ios/ipa
 
-          xcode-project build-ipa \
-            --workspace "$XCODE_WORKSPACE" \
-            --scheme "$XCODE_SCHEME" \
-            --config Release \
-            --ipa-path "$IPA_PATH"
+          if [ "${BUILD_TARGET:-}" = "workspace" ]; then
+            xcode-project build-ipa \
+              --workspace "$XCODE_WORKSPACE" \
+              --scheme "$XCODE_SCHEME" \
+              --config Release \
+              --ipa-path "$IPA_PATH"
+          else
+            xcode-project build-ipa \
+              --project "$XCODE_PROJECT" \
+              --scheme "$XCODE_SCHEME" \
+              --config Release \
+              --ipa-path "$IPA_PATH"
+          fi
 
       - name: Verify IPA exists
         script: |
@@ -165,6 +184,6 @@ workflows:
     publishing:
       app_store_connect:
         api_key: $APP_STORE_CONNECT_PRIVATE_KEY
-        key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
+        key_id: $APP_STORE_CONNECT_KEY_ID
         issuer_id: $APP_STORE_CONNECT_ISSUER_ID
         submit_to_testflight: true
