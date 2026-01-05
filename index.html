@@ -360,7 +360,7 @@
     })();
     </script>
     
-    <!-- PWA Service Worker Registration -->
+    <!-- PWA Service Worker Registration with Auto-Update -->
     <script>
       (function() {
         // Check if service workers are supported
@@ -384,16 +384,57 @@
         }
 
         // Only register in production (detect by checking if hostname is not localhost/127.0.0.1)
-        var isProduction = window.location.hostname !== 'localhost' && 
+        var isProduction = window.location.hostname !== 'localhost' &&
                           window.location.hostname !== '127.0.0.1' &&
                           !window.location.hostname.startsWith('192.168.') &&
                           !window.location.hostname.endsWith('.local');
+
+        // FIX 1: Auto-reload handler for SW updates
+        function handleSWUpdate(registration) {
+          // Listen for new service worker installing
+          registration.addEventListener('updatefound', function() {
+            var newWorker = registration.installing;
+            console.log('🔄 New service worker installing...');
+
+            newWorker.addEventListener('statechange', function() {
+              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                // New SW installed, old one still controlling - trigger reload
+                console.log('✨ New version available! Reloading...');
+                window.location.reload();
+              }
+            });
+          });
+        }
+
+        // Listen for SW_UPDATED message from service worker
+        navigator.serviceWorker.addEventListener('message', function(event) {
+          if (event.data && event.data.type === 'SW_UPDATED') {
+            console.log('📦 SW update detected (version ' + event.data.version + '). Reloading...');
+            window.location.reload();
+          }
+        });
+
+        // Listen for controller change (skipWaiting activated)
+        navigator.serviceWorker.addEventListener('controllerchange', function() {
+          console.log('🔄 Service worker controller changed. Reloading...');
+          window.location.reload();
+        });
 
         if (isProduction) {
           window.addEventListener('load', function() {
             navigator.serviceWorker.register('/sw.js')
               .then(function(registration) {
                 console.log('✅ TradeLine 24/7 SW registered:', registration.scope);
+
+                // Set up auto-update handler
+                handleSWUpdate(registration);
+
+                // Check for updates periodically (every 60 seconds)
+                setInterval(function() {
+                  registration.update().catch(function(err) {
+                    console.warn('⚠️ SW update check failed:', err);
+                  });
+                }, 60000);
               })
               .catch(function(err) {
                 console.warn('⚠️  TradeLine 24/7 SW registration failed:', err);

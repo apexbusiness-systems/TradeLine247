@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { NavigationMenu, NavigationMenuItem, NavigationMenuLink, NavigationMenuList } from '@/components/ui/navigation-menu';
-import { Menu, X, LogOut, User, Settings, Phone, Smartphone } from 'lucide-react';
+import { Menu, X, LogOut, User, Settings, Phone, Smartphone, Download } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { Link, useLocation } from 'react-router-dom';
@@ -20,6 +20,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useUserPreferencesStore } from '@/stores/userPreferencesStore';
+// FIX 5: PWA Install button - Force install prompt with custom UI
+import { usePWA } from '@/hooks/usePWA';
 // CSS import removed in main branch - keeping defensive approach
 
 // Navigation configuration
@@ -54,6 +56,9 @@ export const Header: React.FC = () => {
 
   const { goToWithFeedback = async (path: string) => { window.location.href = path; } } = useSafeNavigation() || {};
   const { preferredName, showWelcomeMessage } = useUserPreferencesStore();
+
+  // FIX 5: PWA Install - Listen for beforeinstallprompt and show custom install button
+  const { isInstallable, isInstalled, showInstallPrompt } = usePWA();
 
   const location = useLocation();
   const mobileMenuId = 'mobile-menu';
@@ -285,11 +290,24 @@ export const Header: React.FC = () => {
             </nav>
           )}
 
-          {/* Right: Language Switcher, Burger, User Menu */}
+          {/* Right: PWA Install, Language Switcher, Burger, User Menu */}
           <div
             data-slot="right"
             className="flex items-center gap-2 ml-auto"
           >
+            {/* FIX 5: PWA Install Button - Visible when installable, hidden when installed */}
+            {isInstallable && !isInstalled && (
+              <Button
+                variant="outline"
+                size={isScrolled ? 'sm' : 'default'}
+                onClick={showInstallPrompt}
+                className="hidden sm:flex items-center gap-2 border-[#FF6B35] text-[#FF6B35] hover:bg-[#FF6B35] hover:text-white transition-all duration-300 hover-scale"
+                aria-label="Install TradeLine 24/7 app"
+              >
+                <Download className="h-4 w-4" />
+                <span className="hidden md:inline">Install App</span>
+              </Button>
+            )}
             {user && (
               <Button
                 variant="default"
@@ -488,6 +506,21 @@ export const Header: React.FC = () => {
               )}
               <div className="border-t border-border" />
               <div className="space-y-3">
+                {/* FIX 5: PWA Install Button in Mobile Menu */}
+                {isInstallable && !isInstalled && (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setIsMobileMenuOpen(false);
+                      showInstallPrompt();
+                    }}
+                    className="w-full justify-center gap-2 border-[#FF6B35] text-[#FF6B35] hover:bg-[#FF6B35] hover:text-white transition-all duration-300"
+                    aria-label="Install TradeLine 24/7 app"
+                  >
+                    <Download className="h-4 w-4" />
+                    Install App
+                  </Button>
+                )}
                 <LanguageSwitcher className="w-full" />
                 {user ? (
                   <Button

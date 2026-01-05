@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" fill="none">
+  <!-- FIX 3: Lightweight spiral SVG to replace 3D WebGL canvas -->
+  <!-- Brand colors: #FF6B35 (orange), #1e556b (navy) -->
+  <defs>
+    <linearGradient id="spiralGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF6B35" stop-opacity="1"/>
+      <stop offset="50%" stop-color="#ff8a4c" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#FF6B35" stop-opacity="0.6"/>
+    </linearGradient>
+    <linearGradient id="spiralGradient2" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1e556b" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#68B6E9" stop-opacity="0.4"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Outer spiral ring -->
+  <circle cx="200" cy="200" r="180" stroke="url(#spiralGradient)" stroke-width="3" fill="none" opacity="0.3"/>
+  <circle cx="200" cy="200" r="160" stroke="url(#spiralGradient)" stroke-width="2" fill="none" opacity="0.4"/>
+  <circle cx="200" cy="200" r="140" stroke="url(#spiralGradient)" stroke-width="2" fill="none" opacity="0.5"/>
+  <circle cx="200" cy="200" r="120" stroke="url(#spiralGradient)" stroke-width="2" fill="none" opacity="0.6"/>
+  <circle cx="200" cy="200" r="100" stroke="url(#spiralGradient)" stroke-width="2" fill="none" opacity="0.7"/>
+  <circle cx="200" cy="200" r="80" stroke="url(#spiralGradient)" stroke-width="3" fill="none" opacity="0.8"/>
+  <circle cx="200" cy="200" r="60" stroke="url(#spiralGradient)" stroke-width="3" fill="none" opacity="0.9"/>
+  <circle cx="200" cy="200" r="40" stroke="url(#spiralGradient)" stroke-width="4" fill="none" opacity="1"/>
+
+  <!-- Spiral arms -->
+  <path
+    d="M200 20
+       Q 350 100, 350 200
+       Q 350 300, 200 350
+       Q 100 350, 50 250
+       Q 20 180, 80 120
+       Q 130 70, 200 80
+       Q 260 90, 290 140
+       Q 320 190, 280 240
+       Q 240 280, 200 260
+       Q 160 240, 160 200"
+    stroke="url(#spiralGradient)"
+    stroke-width="4"
+    fill="none"
+    stroke-linecap="round"
+    opacity="0.7"
+  />
+
+  <path
+    d="M200 380
+       Q 50 300, 50 200
+       Q 50 100, 200 50
+       Q 300 50, 350 150
+       Q 380 220, 320 280
+       Q 270 330, 200 320
+       Q 140 310, 110 260
+       Q 80 210, 120 160
+       Q 160 120, 200 140
+       Q 240 160, 240 200"
+    stroke="url(#spiralGradient2)"
+    stroke-width="3"
+    fill="none"
+    stroke-linecap="round"
+    opacity="0.5"
+  />
+
+  <!-- Center glow -->
+  <circle cx="200" cy="200" r="20" fill="url(#spiralGradient)" opacity="0.9"/>
+  <circle cx="200" cy="200" r="10" fill="#FF6B35" opacity="1"/>
+</svg>

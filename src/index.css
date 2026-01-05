@@ -2047,3 +2047,152 @@ button[class*="orange"]:hover:not([class*="outline"]) {
 @supports (-webkit-touch-callout: none) {
   #app-home, .hero-bg, [class*="hero-section"] { min-height: -webkit-fill-available; }
 }
+
+/* ============================================================================
+   FIX 2: RecordButton Responsive Styles
+   Uses viewport-relative units (vw) with min-width constraints
+   Ensures 48px minimum touch target (WCAG compliance)
+   ============================================================================ */
+.record-button {
+  width: 20vw;
+  height: 20vw;
+  min-width: 80px;
+  min-height: 80px;
+  max-width: 120px;
+  max-height: 120px;
+}
+
+@media (max-width: 480px) {
+  .record-button {
+    width: 25vw;
+    height: 25vw;
+    min-width: 80px;
+    min-height: 80px;
+  }
+}
+
+/* Recording pulse animation */
+@keyframes pulse-recording {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 20px rgba(239, 68, 68, 0);
+  }
+}
+
+.animate-pulse-recording {
+  animation: pulse-recording 1.5s ease-in-out infinite;
+}
+
+/* ============================================================================
+   FIX 3: Spiral Hero Animation (CSS-only rotation)
+   Replaces 3D WebGL canvas with lightweight SVG animation
+   ============================================================================ */
+@keyframes spiral-rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spiral-hero {
+  animation: spiral-rotate 30s linear infinite;
+  will-change: transform;
+  transform-origin: center center;
+}
+
+.spiral-hero-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .spiral-hero {
+    animation: none;
+  }
+}
+
+/* ============================================================================
+   FIX 4: Breakthrough Animation (CSS-only, no JS requestAnimationFrame)
+   Replaces choppy JS-driven animation with smooth CSS keyframes
+   ============================================================================ */
+@keyframes breakthrough-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(255, 107, 53, 0.4);
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.9;
+    box-shadow: 0 0 30px 10px rgba(255, 107, 53, 0.2);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(255, 107, 53, 0);
+  }
+}
+
+@keyframes breakthrough-glow {
+  0%, 100% {
+    filter: brightness(1) drop-shadow(0 0 0 transparent);
+  }
+  50% {
+    filter: brightness(1.1) drop-shadow(0 0 20px rgba(255, 107, 53, 0.5));
+  }
+}
+
+@keyframes breakthrough-expand {
+  0% {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.02);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-breakthrough-pulse {
+  animation: breakthrough-pulse 2s ease-in-out infinite;
+  will-change: transform, opacity, box-shadow;
+}
+
+.animate-breakthrough-glow {
+  animation: breakthrough-glow 3s ease-in-out infinite;
+  will-change: filter;
+}
+
+.animate-breakthrough-expand {
+  animation: breakthrough-expand 0.5s ease-out forwards;
+  will-change: transform, opacity;
+}
+
+/* Breakthrough state trigger - add this class via state change */
+.breakthrough-active {
+  animation: breakthrough-pulse 2s ease-in-out infinite,
+             breakthrough-glow 3s ease-in-out infinite;
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .animate-breakthrough-pulse,
+  .animate-breakthrough-glow,
+  .animate-breakthrough-expand,
+  .breakthrough-active {
+    animation: none !important;
+  }
+}
