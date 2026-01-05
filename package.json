@@ -151,7 +151,7 @@
     "@types/react": "^18.3.27",
     "@types/react-dom": "^18.3.7",
     "@types/testing-library__jest-dom": "^5.14.9",
-    "@vitejs/plugin-react": "^4.7.0",
+    "@vitejs/plugin-react": "^5.1.2",
     "@vitejs/plugin-react-swc": "^4.2.2",
     "autoprefixer": "^10.4.22",
     "axe-core": "^4.11.0",
