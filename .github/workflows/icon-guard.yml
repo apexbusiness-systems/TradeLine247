@@ -10,8 +10,7 @@ jobs:
   icon-guard:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-
+      - uses: actions/checkout@v4
       - name: Check iOS icons
         run: |
           ICON_DIR="ios/App/App/Assets.xcassets/AppIcon.appiconset"
