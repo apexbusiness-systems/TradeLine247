@@ -1,12 +1,56 @@
  
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { validateTwilioRequest } from "../_shared/twilioValidator.ts";
-import { buildInternalNumberSet, isInternalCaller, safeDialTarget } from "../_shared/antiLoop.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+const HOTLINE_NUMBER = '+15877428885';
+
+function normalizeToE164(input: string): string | null {
+  if (!input) return null;
+  const trimmed = input.trim();
+  if (trimmed.startsWith('+')) {
+    const sanitized = trimmed.replace(/[^\d+]/g, '');
+    return /^\+[1-9]\d{1,14}$/.test(sanitized) ? sanitized : null;
+  }
+  const digits = trimmed.replace(/\D/g, '');
+  if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`;
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length >= 8 && digits.length <= 15) return `+${digits}`;
+  return null;
+}
+
+async function isClient(phoneNumber: string): Promise<boolean> {
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+  const { data, error } = await supabase
+    .from('contacts')
+    .select('id')
+    .eq('e164', phoneNumber)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error('Client lookup error:', error);
+    return false;
+  }
+
+  return !!data;
+}
+
+function twimlHotline(callerId: string | null): string {
+  const safeCallerId = callerId || HOTLINE_NUMBER;
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say>Connecting you to our hotline.</Say>
+  <Dial callerId="${safeCallerId}">${HOTLINE_NUMBER.replace('+', '')}</Dial>
+</Response>`;
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -15,120 +59,35 @@ Deno.serve(async (req) => {
 
   try {
     const url = new URL(req.url);
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const opsNumber = Deno.env.get('OPS_NUMBER') || Deno.env.get('BUSINESS_TARGET_E164');
-    const aiWebhook = Deno.env.get('ENV_AI_WEBHOOK');
-    const twilioStreamUrl = Deno.env.get('ENV_TWILIO_STREAM_URL');
-    
-    if (!opsNumber) {
-      throw new Error('Missing OPS_NUMBER or BUSINESS_TARGET_E164');
-    }
-    
+
     // Validate Twilio signature and get params
     const params = await validateTwilioRequest(req, url.toString());
-    
-    const callSid = params.CallSid || url.searchParams.get('callSid') || 'unknown';
-    const from = params.From || 'unknown';
-    const to = params.To || 'unknown';
-    const recordParam = url.searchParams.get('record') || 'true';
-    const shouldRecord = recordParam === 'true';
-    
-    console.log('Voice route: CallSid=%s Record=%s From=%s To=%s', 
-      callSid, shouldRecord, from, to);
-    
-    // Anti-loop protections
-    const internalNumbers = buildInternalNumberSet(Deno.env.toObject() as Record<string, string | undefined>);
-    const internalCaller = isInternalCaller(from, internalNumbers);
-    const dialTarget = safeDialTarget(opsNumber, from, to, internalNumbers);
-    const canDial = !!dialTarget;
+    const fromRaw = params.From || '';
+    const normalizedFrom = normalizeToE164(fromRaw);
 
-    // Initialize Supabase client
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    
-    // Log call routing decision
-    const { error: routeError } = await supabase.from('call_logs').insert({
-      call_sid: callSid,
-      from_e164: from,
-      to_e164: to,
-      mode: aiWebhook || twilioStreamUrl ? 'ai_first' : 'direct_dial',
-      consent_given: shouldRecord,
-      status: 'routing'
-    });
-    
-    if (routeError) {
-      console.error('Failed to log call routing:', routeError);
+    const timeoutMs = 1000;
+    const isClientPromise = normalizedFrom ? isClient(normalizedFrom) : Promise.resolve(false);
+    const clientValidated = await Promise.race([
+      isClientPromise,
+      new Promise<boolean>((resolve) => setTimeout(() => resolve(false), timeoutMs)),
+    ]);
+
+    if (!clientValidated) {
+      const twiml = twimlHotline(normalizedFrom);
+      return new Response(twiml, {
+        headers: { ...corsHeaders, 'Content-Type': 'text/xml' },
+      });
     }
-    
-    // Determine recording attribute based on consent
-    const recordAttr = shouldRecord ? 'record-from-answer-dual' : 'do-not-record';
-    
-    // Build TwiML with AI-first approach (if configured) or direct dial
-    let twiml: string;
-    
-    if (internalCaller || !canDial) {
-      const safeMsg = internalCaller
-        ? 'Admin line active. No forwarding. You are connected to the AI assistant.'
-        : 'We could not forward this call right now. Connecting you to the AI assistant.';
 
-      if (twilioStreamUrl) {
-        const redirectUrl = `${supabaseUrl}/functions/v1/voice-route-action?record=${recordParam}`;
-        twiml = `<?xml version="1.0" encoding="UTF-8"?>
+    const dynamicHost = url.host;
+    const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="Polly.Joanna">${safeMsg}</Say>
-  <Connect action="${redirectUrl}">
-    <Stream url="${twilioStreamUrl}">
-      <Parameter name="callSid" value="${callSid}"/>
-      <Parameter name="record" value="${shouldRecord}"/>
-    </Stream>
-  </Connect>
-  <Hangup/>
-</Response>`;
-      } else {
-        twiml = `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Say voice="Polly.Joanna">${safeMsg}</Say>
-  <Hangup/>
-</Response>`;
-      }
-    } else if (twilioStreamUrl) {
-      // Use Twilio Media Streams for real-time AI
-      twiml = `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Say voice="Polly.Joanna">Connecting you now.</Say>
-  <Connect action="${supabaseUrl}/functions/v1/voice-route-action?record=${recordParam}">
-    <Stream url="${twilioStreamUrl}">
-      <Parameter name="callSid" value="${callSid}"/>
-      <Parameter name="record" value="${shouldRecord}"/>
+  <Connect>
+    <Stream url="wss://${dynamicHost}/stream">
+      <Parameter name="customer_type" value="vip" />
     </Stream>
   </Connect>
 </Response>`;
-    } else if (aiWebhook) {
-      // Use AI webhook (6 second timeout)
-      twiml = `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Dial action="${supabaseUrl}/functions/v1/voice-route-action?record=${recordParam}" 
-        timeout="6" 
-        record="${recordAttr}">
-    <Number url="${aiWebhook}">${dialTarget}</Number>
-  </Dial>
-</Response>`;
-    } else {
-      // Direct dial to ops number
-      twiml = `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Say voice="Polly.Joanna">Connecting you to our team.</Say>
-  <Dial action="${supabaseUrl}/functions/v1/voice-status" 
-        timeout="30" 
-        record="${recordAttr}"
-        callerId="${to}">
-    <Number statusCallback="${supabaseUrl}/functions/v1/voice-status" 
-            statusCallbackEvent="initiated ringing answered completed">${dialTarget}</Number>
-  </Dial>
-  <Say voice="Polly.Joanna">We're sorry, but no one is available to take your call. Please try again later.</Say>
-  <Hangup/>
-</Response>`;
-    }
 
     return new Response(twiml, {
       headers: { ...corsHeaders, 'Content-Type': 'text/xml' },
@@ -136,16 +95,9 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error('Voice route error:', error);
     
-    const errorTwiml = `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Say voice="Polly.Joanna">We're sorry, but we're experiencing technical difficulties. Please try again later.</Say>
-  <Hangup/>
-</Response>`;
-    
-    return new Response(errorTwiml, {
+    const fallbackTwiml = twimlHotline(null);
+    return new Response(fallbackTwiml, {
       headers: { ...corsHeaders, 'Content-Type': 'text/xml' },
-      status: 500,
     });
   }
 });
-
