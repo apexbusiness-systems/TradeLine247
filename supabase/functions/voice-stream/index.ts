@@ -2,6 +2,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { performSafetyCheck, sanitizeForLogging, type SafetyConfig } from "../_shared/voiceSafety.ts";
 import { classifyObjection, getObjectionContext } from "../_shared/objectionClassifier.ts";
+import { validateTwilioSignature } from "../_shared/twilioValidator.ts";
 import {
   redactSensitive,
   categorizeCall,
@@ -14,6 +15,50 @@ import {
   type SessionContext,
   type TL247Meta
 } from "../_shared/compliance.ts";
+
+const LOCAL_BYPASS_HOSTS = ['localhost', '127.0.0.1'];
+const LOCAL_BYPASS_SUFFIXES = ['ngrok.io', 'ngrok-free.app'];
+
+function isLocalTestingHost(hostname: string): boolean {
+  if (LOCAL_BYPASS_HOSTS.includes(hostname)) return true;
+  return LOCAL_BYPASS_SUFFIXES.some((suffix) => hostname.endsWith(suffix));
+}
+
+function reconstructUrl(req: Request, providedUrl: string): string {
+  const url = new URL(providedUrl);
+  const forwardedProto = req.headers.get('x-forwarded-proto');
+  const forwardedHost = req.headers.get('x-forwarded-host');
+  const forwardedPort = req.headers.get('x-forwarded-port');
+
+  if (forwardedProto && forwardedHost) {
+    const protocol = forwardedProto === 'https' ? 'https' : 'http';
+    const port = forwardedPort && forwardedPort !== '80' && forwardedPort !== '443' ? `:${forwardedPort}` : '';
+    return `${protocol}://${forwardedHost}${port}${url.pathname}${url.search}`;
+  }
+
+  return providedUrl;
+}
+
+async function validateTwilioWebSocket(req: Request): Promise<boolean> {
+  const isProd = Deno.env.get('NODE_ENV') === 'production';
+  const allowInsecure = Deno.env.get('ALLOW_INSECURE_TWILIO_WEBHOOKS') === 'true';
+  const signature = req.headers.get('X-Twilio-Signature') || req.headers.get('x-twilio-signature');
+  const url = new URL(req.url);
+
+  if (!signature) {
+    if (!isProd && (allowInsecure || isLocalTestingHost(url.hostname))) {
+      console.warn('⚠️  DEV MODE: Bypassing Twilio signature for websocket');
+      return true;
+    }
+    return false;
+  }
+
+  const authToken = Deno.env.get('TWILIO_AUTH_TOKEN');
+  if (!authToken) return false;
+
+  const reconstructedUrl = reconstructUrl(req, url.toString());
+  return validateTwilioSignature(reconstructedUrl, {}, signature, authToken);
+}
 
 // Helper: Substitute variables in prompt template
 function substitutePromptTemplate(template: string, variables: Record<string, string>): string {
@@ -197,6 +242,11 @@ Deno.serve(async (req) => {
   
   if (upgrade.toLowerCase() !== "websocket") {
     return new Response("Expected websocket connection", { status: 426 });
+  }
+
+  const signatureValid = await validateTwilioWebSocket(req);
+  if (!signatureValid) {
+    return new Response("Unauthorized", { status: 401 });
   }
 
   const { socket, response } = Deno.upgradeWebSocket(req);
@@ -570,7 +620,7 @@ Deno.serve(async (req) => {
         .eq('call_sid', callSid)
         .then();
         
-    } else if (data.event === 'media' && openaiWs.readyState === WebSocket.OPEN) {
+    } else if (data.event === 'media' && handshakeCompleted && openaiWs.readyState === WebSocket.OPEN) {
       // Forward audio to OpenAI
       openaiWs.send(JSON.stringify({
         type: 'input_audio_buffer.append',
