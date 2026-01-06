@@ -21,31 +21,34 @@ jobs:
       SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+
       - uses: supabase/setup-cli@v1
         with:
           version: latest
 
-      - name: 🔗 Link to Remote Project
+      - name: 🔍 Network Sanity Check (Debugging Only)
+        shell: bash
         run: |
-          mkdir -p supabase/.temp
-          supabase link --project-ref "$SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
-          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          echo "Checking network connectivity..."
+          echo "IPv4 egress:" && curl -4 -s https://ifconfig.co/ip || echo "IPv4 check failed"
+          echo "IPv6 egress:" && curl -6 -s https://ifconfig.co/ip || echo "IPv6 check failed"
+        continue-on-error: true
 
-      - name: 🐘 Run Database Migrations
+      - name: 🐘 Run Database Migrations (Supavisor Pooler)
         shell: bash
         run: |
           # IPv6 Migration Fix:
-          # Unset PG* variables to prevent local connection attempts
-          unset PGHOST PGPORT PGUSER PGDATABASE
+          # - Direct host (db.<project-ref>.supabase.co) resolves to IPv6
+          # - GitHub Actions runners often lack IPv6 egress support
+          # - Using Supavisor Session pooler connection string (IPv4-compatible)
+          # - --db-url requires percent-encoded connection string
+          # - Connection string obtained from Supabase Dashboard → Connect → Session pooler
 
-          echo "🚀 Starting Migration..."
+          echo "🚀 Starting Stateless Migration via Supavisor pooler..."
           echo "Supabase CLI version: $(supabase --version)"
 
-          set +x
-          supabase db push --include-all --password "$SUPABASE_DB_PASSWORD"
-        env:
-          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          # Execute migration using Supavisor pooler (IPv4-compatible)
+          # Note: SUPABASE_DB_URL must be percent-encoded for --db-url flag
+          set +x  # Disable command echoing to avoid logging credentials
+          supabase db push --include-all --db-url "$SUPABASE_DB_URL" --debug

@@ -7,8 +7,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const HOTLINE_NUMBER_E164 = '+15877428885';
-const HOTLINE_NUMBER_DIAL = '5877428885';
+const HOTLINE_NUMBER = '+15877428885';
 
 function normalizeToE164(input: string): string | null {
   if (!input) return null;
@@ -45,11 +44,11 @@ async function isClient(phoneNumber: string): Promise<boolean> {
 }
 
 function twimlHotline(callerId: string | null): string {
-  const safeCallerId = callerId || HOTLINE_NUMBER_E164;
+  const safeCallerId = callerId || HOTLINE_NUMBER;
   return `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Say>Connecting you to our hotline.</Say>
-  <Dial callerId="${safeCallerId}">${HOTLINE_NUMBER_DIAL}</Dial>
+  <Dial callerId="${safeCallerId}">${HOTLINE_NUMBER.replace('+', '')}</Dial>
 </Response>`;
 }
 

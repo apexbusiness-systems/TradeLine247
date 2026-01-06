@@ -1,88 +1,128 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { validateRequest } from "https://esm.sh/twilio@4.23.0/lib/webhooks/webhooks.js";
+ 
+import { validateTwilioRequest } from "../_shared/twilioValidator.ts";
 
-console.log("🚀 Voice Frontdoor Loaded - Fail-Open Mode");
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
 
-serve(async (req) => {
+// In-memory rate limiting (Edge-compatible)
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT_WINDOW_MS = 60000; // 1 minute
+const MAX_REQUESTS_PER_WINDOW = 10;
+
+function checkRateLimit(identifier: string): boolean {
+  const now = Date.now();
+  const record = rateLimitMap.get(identifier);
+  
+  if (!record || now > record.resetAt) {
+    rateLimitMap.set(identifier, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return true;
+  }
+  
+  if (record.count >= MAX_REQUESTS_PER_WINDOW) {
+    return false;
+  }
+  
+  record.count++;
+  return true;
+}
+
+// Cleanup old entries periodically
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, record] of rateLimitMap.entries()) {
+    if (now > record.resetAt) {
+      rateLimitMap.delete(key);
+    }
+  }
+}, RATE_LIMIT_WINDOW_MS);
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
   try {
-    // Log everything for debugging
     const url = new URL(req.url);
-    console.log(`📞 INCOMING: ${req.method} ${url.toString()}`);
-    console.log(`📋 HEADERS: Host=${req.headers.get("host")}, Proto=${url.protocol}, Sig=${!!req.headers.get("x-twilio-signature")}`);
-
-    // Health check
-    if (req.method === "GET") {
-      return new Response(JSON.stringify({ 
-        status: "active", 
-        service: "voice-frontdoor",
-        timestamp: new Date().toISOString()
-      }), {
-        headers: { "Content-Type": "application/json" },
-        status: 200
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    
+    // Validate Twilio signature and get params
+    const params = await validateTwilioRequest(req, url.toString());
+    
+    const from = params.From || 'unknown';
+    const callSid = params.CallSid || 'unknown';
+    
+    // Rate limiting by caller number and IP
+    const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0] || 'unknown';
+    
+    if (!checkRateLimit(from) || !checkRateLimit(clientIp)) {
+      console.warn(`Rate limit exceeded: From=${from}, IP=${clientIp}`);
+      
+      const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="Polly.Joanna">We're experiencing high call volume. Please try again later.</Say>
+  <Hangup/>
+</Response>`;
+      
+      return new Response(twiml, {
+        headers: { ...corsHeaders, 'Content-Type': 'text/xml' },
+        status: 429,
       });
     }
-
-    // Check auth token
-    const authToken = Deno.env.get("TWILIO_AUTH_TOKEN");
-    if (!authToken) {
-      throw new Error("FATAL: No TWILIO_AUTH_TOKEN in env");
-    }
-
-    // Parse body safely
-    const bodyText = await req.text();
-    console.log(`📄 Body Length: ${bodyText.length} chars`);
     
-    let params: Record<string, string> = {};
-    if (bodyText && req.headers.get("content-type")?.includes("application/x-www-form-urlencoded")) {
-      const urlParams = new URLSearchParams(bodyText);
-      urlParams.forEach((val, key) => params[key] = val);
-      console.log(`📊 Parsed Params: ${Object.keys(params).join(", ")}`);
-    } else {
-      console.log("⚠️ No URL-encoded body or content-type mismatch");
-    }
+    console.log('Front door: CallSid=%s From=%s', callSid, from);
 
-    // Validate Twilio request (but don't block on failure)
-    try {
-      const twilioSignature = req.headers.get("x-twilio-signature") || "";
-      const isValid = validateRequest(authToken, twilioSignature, url.toString(), params);
-      if (!isValid) {
-        console.log("⚠️  Twilio validation failed - continuing in fail-open mode");
-        console.log(`  Expected URL: ${url.toString()}`);
-        console.log(`  Actual Sig: ${twilioSignature}`);
-      } else {
-        console.log("✅ Twilio Signature Validated");
-      }
-    } catch (validationError) {
-      console.log("⚠️  Validation process error - continuing in fail-open mode");
-    }
+    const skipConsent = url.searchParams.get('skip_consent') === 'true';
 
-    // SUCCESS - Redirect to voice-incoming with full absolute URL
-    const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+    let twiml: string;
+
+    if (skipConsent) {
+      // Skip to menu directly (for menu repeat)
+      twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Redirect method="POST">https://hysvqdwmhxnblxfqnszn.supabase.co/functions/v1/voice-incoming</Redirect>
+  <Gather action="${supabaseUrl}/functions/v1/voice-menu-handler" method="POST" numDigits="1" timeout="5">
+    <Say voice="Polly.Joanna">
+      Press 1 for Sales. Press 2 for Support. Press 9 to leave a voicemail. Press star to repeat this menu.
+    </Say>
+  </Gather>
+  <Redirect method="POST">${supabaseUrl}/functions/v1/voice-voicemail?reason=menu_timeout</Redirect>
 </Response>`;
+    } else {
+      // Canadian consent disclosure + menu
+      twiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="Polly.Joanna" language="en-CA">
+    Thank you for calling TradeLine 24/7.
+    This call may be recorded for quality and training purposes.
+    By staying on the line, you consent to being recorded.
+  </Say>
+  <Gather action="${supabaseUrl}/functions/v1/voice-menu-handler" method="POST" numDigits="1" timeout="5">
+    <Say voice="Polly.Joanna">
+      Press 1 for Sales. Press 2 for Support. Press 9 to leave a voicemail. Press star to repeat this menu.
+    </Say>
+  </Gather>
+  <Redirect method="POST">${supabaseUrl}/functions/v1/voice-voicemail?reason=menu_timeout</Redirect>
+</Response>`;
+    }
 
-    console.log("✅ Redirecting to voice-incoming");
     return new Response(twiml, {
-      headers: { "Content-Type": "text/xml" },
-      status: 200,
+      headers: { ...corsHeaders, 'Content-Type': 'text/xml' },
     });
-
   } catch (error) {
-    console.error("💥 CRITICAL ERROR:", error);
+    console.error('Front door error:', error);
     
-    // FAIL-OPEN: Always return 200 with error message
-    const errorTwiml = `
-      <Response>
-        <Say>System Error.</Say>
-        <Say>${error.message.replace(/[^a-zA-Z0-9 ]/g, " ")}</Say>
-      </Response>
-    `;
+    // Generic error TwiML
+    const errorTwiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="Polly.Joanna">We're sorry, but we're experiencing technical difficulties. Please try again later.</Say>
+  <Hangup/>
+</Response>`;
     
     return new Response(errorTwiml, {
-      headers: { "Content-Type": "text/xml" },
-      status: 200
+      headers: { ...corsHeaders, 'Content-Type': 'text/xml' },
+      status: 500,
     });
   }
 });
+
