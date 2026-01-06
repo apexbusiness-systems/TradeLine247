@@ -1,24 +1,17 @@
-name: db/migrate
+name: migrate
+
 on:
-  workflow_dispatch:
   push:
-    branches: [main]
+    branches:
+      - main
     paths:
-      - supabase/migrations/**
-  pull_request:
-    branches: [main]
-    paths:
-      - supabase/migrations/**
+      - 'supabase/migrations/**'
+  workflow_dispatch: # Allow manual trigger
 
 jobs:
   migrate:
     runs-on: ubuntu-latest
-    env:
-      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-      # SUPABASE_DB_URL: Full Supavisor Session pooler connection string (IPv4-compatible)
-      # Obtain from: Supabase Dashboard → Project → Connect → "Session pooler" (port 5432)
-      # Must be percent-encoded (especially password) for Supabase CLI --db-url flag
-      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+    timeout-minutes: 10
 
     steps:
       - uses: actions/checkout@v6
@@ -27,28 +20,38 @@ jobs:
         with:
           version: latest
 
-      - name: 🔍 Network Sanity Check (Debugging Only)
-        shell: bash
+      # CRITICAL FIX: Create temp directory BEFORE running CLI
+      - name: Prepare Supabase Environment
         run: |
-          echo "Checking network connectivity..."
-          echo "IPv4 egress:" && curl -4 -s https://ifconfig.co/ip || echo "IPv4 check failed"
-          echo "IPv6 egress:" && curl -6 -s https://ifconfig.co/ip || echo "IPv6 check failed"
-        continue-on-error: true
+          mkdir -p supabase/.temp
+          touch supabase/.temp/profile
+          echo "✅ Environment prepared"
 
-      - name: 🐘 Run Database Migrations (Supavisor Pooler)
-        shell: bash
+      # CRITICAL FIX: Use direct database connection (no CLI linking)
+      - name: Run Migrations (Direct Connection)
         run: |
-          # IPv6 Migration Fix:
-          # - Direct host (db.<project-ref>.supabase.co) resolves to IPv6
-          # - GitHub Actions runners often lack IPv6 egress support
-          # - Using Supavisor Session pooler connection string (IPv4-compatible)
-          # - --db-url requires percent-encoded connection string
-          # - Connection string obtained from Supabase Dashboard → Connect → Session pooler
+          echo "🚀 Starting migration to remote database..."
 
-          echo "🚀 Starting Stateless Migration via Supavisor pooler..."
-          echo "Supabase CLI version: $(supabase --version)"
+          # Use existing secret name
+          DB_URL="${{ secrets.SUPABASE_DB_URL }}"
 
-          # Execute migration using Supavisor pooler (IPv4-compatible)
-          # Note: SUPABASE_DB_URL must be percent-encoded for --db-url flag
-          set +x  # Disable command echoing to avoid logging credentials
-          supabase db push --include-all --db-url "$SUPABASE_DB_URL" --debug
+          echo "Connecting to Supabase database..."
+
+          # Apply migrations directly with connection string
+          supabase db push --db-url "$DB_URL" --include-all
+
+          echo "✅ Migrations applied successfully"
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+
+      # Verify migrations were applied
+      - name: Verify Migration Status
+        run: |
+          DB_URL="${{ secrets.SUPABASE_DB_URL }}"
+
+          # List applied migrations
+          supabase migration list --db-url "$DB_URL"
+
+          echo "✅ Migration verification complete"
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
