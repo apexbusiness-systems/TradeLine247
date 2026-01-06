@@ -57,15 +57,13 @@ serve(async (req) => {
       console.log("⚠️  Validation process error - continuing in fail-open mode");
     }
 
-    // SUCCESS - Return TwiML
-    const twiml = `
-      <Response>
-        <Say voice="alice">Tradeline 247 Systems Online.</Say>
-        <Say>Hotline is active. Implement your business logic here.</Say>
-      </Response>
-    `;
+    // SUCCESS - Redirect to voice-incoming with full absolute URL
+    const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Redirect method="POST">https://hysvqdwmhxnblxfqnszn.supabase.co/functions/v1/voice-incoming</Redirect>
+</Response>`;
 
-    console.log("✅ Returning Success TwiML");
+    console.log("✅ Redirecting to voice-incoming");
     return new Response(twiml, {
       headers: { "Content-Type": "text/xml" },
       status: 200,
