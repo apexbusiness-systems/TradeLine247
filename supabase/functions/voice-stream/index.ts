@@ -19,6 +19,28 @@ import {
 const LOCAL_BYPASS_HOSTS = ['localhost', '127.0.0.1'];
 const LOCAL_BYPASS_SUFFIXES = ['ngrok.io', 'ngrok-free.app'];
 
+// OpenAI timeout configuration
+const OPENAI_TIMEOUT_MS = 25000; // 25s safety margin (Twilio allows 30s max)
+
+// Fallback TwiML responses for timeout scenarios
+const FALLBACK_TWIML = {
+  TECHNICAL_DIFFICULTY: `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="alice">I apologize, I'm having technical difficulties right now. Let me take a message for you.</Say>
+  <Say voice="alice">Please state your name, company, and phone number after the beep, and we'll call you back shortly.</Say>
+  <Record maxLength="60" transcribe="true" transcribeCallback="/functions/v1/voice-recording-status"/>
+  <Say voice="alice">Thank you. We'll be in touch soon.</Say>
+  <Hangup/>
+</Response>`,
+
+  HIGH_VOLUME: `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="alice">We're experiencing high call volume. Please leave a message after the beep.</Say>
+  <Record maxLength="60" transcribe="true" transcribeCallback="/functions/v1/voice-recording-status"/>
+  <Hangup/>
+</Response>`
+};
+
 function isLocalTestingHost(hostname: string): boolean {
   if (LOCAL_BYPASS_HOSTS.includes(hostname)) return true;
   return LOCAL_BYPASS_SUFFIXES.some((suffix) => hostname.endsWith(suffix));
@@ -315,17 +337,48 @@ Deno.serve(async (req) => {
     call_category: 'lead_capture'
   };
 
-  // Connect to OpenAI Realtime API
-  try {
-    openaiWs = new WebSocket(
-      'wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17',
-      {
-        headers: {
-          'Authorization': `Bearer ${OPENAI_API_KEY}`,
-          'OpenAI-Beta': 'realtime=v1'
+// Helper: Connect to OpenAI with timeout fallback
+async function connectToOpenAIWithTimeout(apiKey: string, callSid: string): Promise<WebSocket> {
+  return new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      console.error(`[${callSid}] OpenAI connection timeout after ${OPENAI_TIMEOUT_MS}ms`);
+      reject(new Error('OpenAI connection timeout'));
+    }, OPENAI_TIMEOUT_MS);
+
+    try {
+      const ws = new WebSocket(
+        'wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17',
+        {
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'OpenAI-Beta': 'realtime=v1'
+          }
         }
-      }
-    );
+      );
+
+      ws.onopen = () => {
+        clearTimeout(timeoutId);
+        console.log(`[${callSid}] ✅ Connected to OpenAI Realtime API`);
+        resolve(ws);
+      };
+
+      ws.onerror = (error) => {
+        clearTimeout(timeoutId);
+        console.error(`[${callSid}] OpenAI WebSocket connection error:`, error);
+        reject(new Error('OpenAI WebSocket connection failed'));
+      };
+
+    } catch (error) {
+      clearTimeout(timeoutId);
+      console.error(`[${callSid}] Failed to create OpenAI WebSocket:`, error);
+      reject(error);
+    }
+  });
+}
+
+// Connect to OpenAI Realtime API with timeout handling
+  try {
+    openaiWs = await connectToOpenAIWithTimeout(OPENAI_API_KEY, callSid);
 
     openaiWs.onopen = () => {
       console.log('✅ Connected to OpenAI Realtime API');
