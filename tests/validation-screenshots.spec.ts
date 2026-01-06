@@ -94,10 +94,10 @@ test.describe('Validation Screenshots', () => {
     await expect(page.locator('main')).toBeVisible();
     await page.waitForTimeout(2000);
 
-    // Landing page uses section.hero-section as main content area (no <main> tag)
-    const heroSection = page.locator('section.hero-section').first();
-    const count = await heroSection.count();
-    expect(count).toBeGreaterThan(0);
+    // Verify main landmark has proper accessibility attributes for WCAG AA compliance
+    const mainElement = page.locator('main').first();
+    await expect(mainElement).toHaveAttribute('id', 'main-content');
+    await expect(mainElement).toHaveAttribute('role', 'main');
 
     await page.screenshot({
       path: join(SCREENSHOT_DIR, '07-main-landmark-accessibility.png'),
