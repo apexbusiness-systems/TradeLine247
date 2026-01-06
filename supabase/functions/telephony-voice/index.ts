@@ -62,6 +62,32 @@ async function logInboundCall(callData: any) {
   });
 }
 
+// OpenAI connection health check with timeout
+async function checkOpenAIHealth(): Promise<boolean> {
+  const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
+  if (!OPENAI_API_KEY) return false;
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout for health check
+
+    const response = await fetch('https://api.openai.com/v1/models', {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+    return response.ok;
+  } catch (error) {
+    console.warn('OpenAI health check failed:', error.message);
+    return false;
+  }
+}
+
 function isTestNumber(fromNumber: string): boolean {
   // Normalize phone number (remove + and spaces)
   const normalized = fromNumber.replace(/^\+/, '').replace(/\s/g, '');
@@ -102,14 +128,30 @@ export default async (req: Request) => {
   let xml: string;
 
   if (receptionistMode) {
-    // Route to AI receptionist
-    console.log(`🤖 Routing ${callData.CallSid} to AI receptionist (test allowlist)`);
-    xml = `<?xml version="1.0" encoding="UTF-8"?>
+    // Check OpenAI service health before routing to AI receptionist
+    const openaiHealthy = await checkOpenAIHealth();
+
+    if (openaiHealthy) {
+      // Route to AI receptionist
+      console.log(`🤖 Routing ${callData.CallSid} to AI receptionist (test allowlist)`);
+      xml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Connect>
     <Stream url="wss://${new URL(req.url).host}/functions/v1/voice-stream?callSid=${callData.CallSid}" />
   </Connect>
 </Response>`;
+    } else {
+      // OpenAI service unavailable - fallback to voicemail
+      console.log(`📞 OpenAI unavailable - routing ${callData.CallSid} to voicemail fallback`);
+      xml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="alice">I apologize, I'm having technical difficulties right now. Let me take a message for you.</Say>
+  <Say voice="alice">Please state your name, company, and phone number after the beep, and we'll call you back shortly.</Say>
+  <Record maxLength="60" transcribe="true" transcribeCallback="/functions/v1/voice-recording-status"/>
+  <Say voice="alice">Thank you. We'll be in touch soon.</Say>
+  <Hangup/>
+</Response>`;
+    }
   } else {
     // Standard forwarding flow
     console.log(`📞 Standard forwarding for ${callData.CallSid}`);
