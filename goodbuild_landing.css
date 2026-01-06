@@ -1,0 +1,58 @@
+/* Landing Page Background Styles */
+/* Required for Playwright tests to pass */
+
+.landing-wallpaper {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-image: url('/src/assets/BACKGROUND_IMAGE1.svg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.landing-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-image: linear-gradient(to bottom, rgba(255,107,53,0.55) 0%, rgba(104,182,233,0.55) 100%);
+  z-index: 1;
+  pointer-events: none;
+}
+
+.hero-gradient-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-image: linear-gradient(to bottom, rgba(255, 107, 53, 0.28) 0%, rgba(104, 182, 233, 0.28) 100%);
+  z-index: 2;
+  pointer-events: none;
+}
+
+.content-gradient-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-image: linear-gradient(to bottom, rgba(255, 107, 53, 0.72) 0%, rgba(104, 182, 233, 0.72) 100%);
+  z-index: 2;
+  pointer-events: none;
+}
+
+/* Ensure background layers don't interfere with scrolling */
+.landing-wallpaper,
+.landing-mask,
+.hero-gradient-overlay,
+.content-gradient-overlay {
+  will-change: transform;
+  transform: translateZ(0);
+}
