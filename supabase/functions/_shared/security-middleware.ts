@@ -523,9 +523,9 @@ export class EnterpriseSecurity {
     if (typeof input === 'string') {
       // Basic XSS prevention
       return input
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
+        .replace(/</g, '<')
+        .replace(/>/g, '>')
+        .replace(/"/g, '"')
         .replace(/'/g, '&#x27;')
         .replace(/\//g, '&#x2F;')
         .trim();
@@ -587,3 +587,4 @@ export function withSecurityCheck<T extends any[], R>(
 }
 
 export default enterpriseSecurity;
+      // Security violations are already logged in performSecurityCheck

@@ -59,10 +59,36 @@ self.addEventListener("fetch", (event) => {
 
   // Skip non-GET requests, chrome extensions, and auth callbacks
   if (
-    request.method !== 'GET' || 
+    request.method !== 'GET' ||
     url.protocol === 'chrome-extension:' ||
     url.pathname.includes('/auth/callback')
   ) {
+    return;
+  }
+
+  // SECURITY: Explicitly bypass caching for sensitive routes
+  const sensitiveRoutes = [
+    '/rest/v1/',
+    '/auth/v1/',
+    '/functions/v1/',
+    '/api/',
+    '/admin/',
+    '/dashboard/',
+    '/settings/',
+    '/profile/',
+    '/account/',
+    '/billing/',
+    '/workspace/',
+    '/team/',
+    '/organization/'
+  ];
+
+  const isSensitiveRoute = sensitiveRoutes.some(route =>
+    url.pathname.includes(route)
+  );
+
+  if (isSensitiveRoute) {
+    // Network-only for sensitive routes - never cache
     return;
   }
 
@@ -80,66 +106,4 @@ self.addEventListener("fetch", (event) => {
             return cached;
           }
         }
-
-        // Fetch with timeout
-        return Promise.race([
-          fetch(request).then(response => {
-            if (response.ok && response.status === 200) {
-              const responseToCache = response.clone();
-              const headers = new Headers(responseToCache.headers);
-              headers.set('sw-cache-time', Date.now().toString());
-              
-              const blob = responseToCache.blob();
-              blob.then(b => {
-                const cachedResponse = new Response(b, {
-                  status: responseToCache.status,
-                  statusText: responseToCache.statusText,
-                  headers: headers
-                });
-                
-                caches.open(STATIC_CACHE).then(cache => {
-                  cache.put(request, cachedResponse);
-                });
-              });
-            }
-            return response;
-          }),
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Network timeout')), CACHE_CONFIG.networkTimeout)
-          )
         ]).catch(() => cached || new Response('Offline', { status: 503 }));
-      })
-    );
-    return;
-  }
-
-  // API requests strategy: Network-first with short cache fallback
-  if (url.pathname.includes('/functions/') || url.pathname.includes('/rest/')) {
-    event.respondWith(
-      fetch(request)
-        .then(response => {
-          if (response.ok && response.status === 200) {
-            const responseToCache = response.clone();
-            caches.open(API_CACHE).then(cache => {
-              cache.put(request, responseToCache);
-              // Limit API cache size
-              cache.keys().then(keys => {
-                if (keys.length > 20) {
-                  cache.delete(keys[0]);
-                }
-              });
-            });
-          }
-          return response;
-        })
-        .catch(() => {
-          return caches.match(request).then(cached => 
-            cached || new Response('Offline', { status: 503 })
-          );
-        })
-    );
-    return;
-  }
-
-  // Default: network-only for HTML and other resources
-});

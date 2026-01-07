@@ -5,7 +5,13 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { corsHeaders, preflight } from '../_shared/cors.ts';
+import {
+  corsHeadersFor,
+  handleCorsPreflight,
+  requireAuth,
+  rateLimitOr429,
+  createSecureResponse
+} from '../_shared/security.ts';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -124,65 +130,39 @@ function synthesizeAnswer(question: string, context: RagContextItem[], lang?: st
 }
 
 async function handleRagAnswer(req: Request): Promise<Response> {
-  const pf = preflight(req);
-  if (pf) return pf;
+  // Handle CORS preflight
+  if (req.method === 'OPTIONS') {
+    return handleCorsPreflight(req);
+  }
 
   if (req.method !== 'POST') {
-    return new Response(
-      JSON.stringify({ ok: false, error: 'Method not allowed. Use POST.' } as RagAnswerResponse),
-      { 
-        status: 405,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      }
+    return createSecureResponse(
+      { ok: false, error: 'Method not allowed. Use POST.' } as RagAnswerResponse,
+      { status: 405, req }
     );
   }
 
   try {
+    // Require authentication for sensitive RAG operations
+    const { userId } = await requireAuth(req);
+
     // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    
+
     if (!supabaseUrl || !supabaseServiceKey) {
       throw new Error('Missing Supabase configuration');
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get client identifier for rate limiting
-    const clientIP = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 
-                     req.headers.get('x-real-ip') || 
-                     'unknown';
-    const rateLimitKey = `rag-answer:${clientIP}`;
-
-    // Check rate limit: 30 requests per minute (more restrictive than search)
-    const rateLimitResult = await checkRateLimit(supabase, rateLimitKey, 30, 60);
-    
-    if (!rateLimitResult.allowed) {
-      console.warn(`Rate limit exceeded for RAG answer: ${clientIP}`);
-      
-      // Log security event
-      await supabase.from('analytics_events').insert({
-        event_type: 'rate_limit_exceeded',
-        event_data: { 
-          endpoint: 'rag-answer',
-          ip: clientIP,
-          remaining: rateLimitResult.remaining
-        },
-        ip_address: clientIP
-      });
-
-      return new Response(
-        JSON.stringify({ 
-          ok: false, 
-          error: 'Rate limit exceeded. Please try again later.',
-          remaining: rateLimitResult.remaining
-        } as RagAnswerResponse),
-        { 
-          status: 429,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        }
-      );
-    }
+    // Apply rate limiting: 30 requests per minute per user
+    await rateLimitOr429({
+      key: `rag-answer:${userId}`,
+      limit: 30,
+      windowSec: 60,
+      userId
+    });
 
     // Parse request body
     const bodyRaw = await parseRequestJSON<RagAnswerRequest>(req);
@@ -268,3 +248,4 @@ async function handleRagAnswer(req: Request): Promise<Response> {
 
 /** Deno / Supabase Edge entrypoint */
 Deno.serve((req: Request) => handleRagAnswer(req));
+    return new Response(
