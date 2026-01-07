@@ -31,5 +31,6 @@ export const paths = {
   messagingHealth: "/ops/messaging-health",
   voiceHealth: "/ops/voice-health",
   twilioEvidence: "/ops/twilio-evidence",
+  voiceMonitoring: "/internal/voice-monitoring",
   notFound: "*",
 } as const;
