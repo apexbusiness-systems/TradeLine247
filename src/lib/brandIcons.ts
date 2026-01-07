@@ -9,7 +9,7 @@
 
 /**
  * Startup splash robot icon path
- * Used in: StartupSplash, Chatbox, and other UI components
+ * Used in: SplashV2, Chatbox, and other UI components
  */
 export const ROBOT_ICON_PATH = '/assets/brand/TRADELEINE_ROBOT_V2.svg';
 
