@@ -155,10 +155,11 @@ Deno.serve(async (req) => {
     const isHotline = (To === HOTLINE_DID) || HOTLINE_ASSISTANT_ONLY;
 
     // Helper to create secure stream URL with short-lived HMAC token
+    // CRITICAL FIX: Route to voice-stream (WebSocket handler), NOT enhanced-voice-stream (HTTP only)
     async function makeStreamUrl(callSid: string): Promise<string> {
       const token = await createStreamToken(VOICE_STREAM_SECRET, callSid, 3 * 60 * 1000); // 3m TTL
       const base = supabaseUrl.replace('https://', '');
-      return `wss://${base}/functions/v1/enhanced-voice-stream?callSid=${callSid}&streamToken=${token}`;
+      return `wss://${base}/functions/v1/voice-stream?callSid=${callSid}&streamToken=${token}`;
     }
 
     console.log('Incoming call:', { CallSid, From, To, AnsweredBy, isHotline });

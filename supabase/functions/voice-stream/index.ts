@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { performSafetyCheck, sanitizeForLogging, type SafetyConfig } from "../_shared/voiceSafety.ts";
 import { classifyObjection, getObjectionContext } from "../_shared/objectionClassifier.ts";
 import { validateTwilioSignature } from "../_shared/twilioValidator.ts";
+import { verifyStreamToken } from "../_shared/stream_token.ts";
 import {
   redactSensitive,
   categorizeCall,
@@ -67,6 +68,22 @@ async function validateTwilioWebSocket(req: Request): Promise<boolean> {
   const signature = req.headers.get('X-Twilio-Signature') || req.headers.get('x-twilio-signature');
   const url = new URL(req.url);
 
+  // CRITICAL FIX: Check for stream token authentication first
+  // This allows voice-answer to connect via HMAC token without Twilio signature
+  const streamToken = url.searchParams.get('streamToken');
+  if (streamToken) {
+    const secret = Deno.env.get('VOICE_STREAM_SECRET') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    if (secret) {
+      const result = await verifyStreamToken(secret, streamToken);
+      if (result.ok) {
+        console.log(`✅ Stream token validated for call: ${result.callSid}`);
+        return true;
+      }
+      console.warn(`⚠️ Stream token validation failed: ${result.reason}`);
+    }
+  }
+
+  // Fallback to Twilio signature validation
   if (!signature) {
     if (!isProd && (allowInsecure || isLocalTestingHost(url.hostname))) {
       console.warn('⚠️  DEV MODE: Bypassing Twilio signature for websocket');
@@ -380,30 +397,37 @@ async function connectToOpenAIWithTimeout(apiKey: string, callSid: string): Prom
   try {
     openaiWs = await connectToOpenAIWithTimeout(OPENAI_API_KEY, callSid);
 
-    openaiWs.onopen = () => {
-      console.log('✅ Connected to OpenAI Realtime API');
+    // ============================================================
+    // CRITICAL FIX: Send session config IMMEDIATELY after connection
+    // The onopen event already fired inside connectToOpenAIWithTimeout()
+    // Setting onopen handler here would be DEAD CODE (race condition)
+    // ============================================================
 
-      // 1. Configure Session: Enable "Ear" (VAD)
-      const sessionUpdate = {
-        type: 'session.update',
-        session: {
-          voice: 'shimmer',
-          instructions: systemPrompt || "You are a helpful AI assistant for TradeLine 24/7.",
-          modalities: ['text', 'audio'],
-          input_audio_format: 'g711_ulaw',
-          output_audio_format: 'g711_ulaw',
-          turn_detection: {
-            type: 'server_vad', // <--- CRITICAL FIX: Enables listening
-            threshold: 0.5,
-            prefix_padding_ms: 300,
-            silence_duration_ms: 600
-          }
+    console.log(`[${callSid}] 🎙️ Configuring OpenAI session with VAD and greeting...`);
+
+    // 1. Configure Session: Enable "Ear" (Server VAD for voice detection)
+    const sessionUpdate = {
+      type: 'session.update',
+      session: {
+        voice: 'shimmer',
+        instructions: systemPrompt || "You are a helpful AI assistant for TradeLine 24/7.",
+        modalities: ['text', 'audio'],
+        input_audio_format: 'g711_ulaw',
+        output_audio_format: 'g711_ulaw',
+        turn_detection: {
+          type: 'server_vad',
+          threshold: 0.5,
+          prefix_padding_ms: 300,
+          silence_duration_ms: 600
         }
-      };
-      openaiWs.send(JSON.stringify(sessionUpdate));
+      }
+    };
+    openaiWs.send(JSON.stringify(sessionUpdate));
+    console.log(`[${callSid}] ✅ Session configured with server_vad`);
 
-      // 2. Trigger Greeting: Enable "Voice" (Break Deadlock)
-      setTimeout(() => {
+    // 2. Trigger Initial Greeting (with small delay to ensure session config applies)
+    setTimeout(() => {
+      if (openaiWs.readyState === WebSocket.OPEN) {
         const initialGreeting = {
           type: 'response.create',
           response: {
@@ -412,8 +436,9 @@ async function connectToOpenAIWithTimeout(apiKey: string, callSid: string): Prom
           }
         };
         openaiWs.send(JSON.stringify(initialGreeting));
-      }, 100); // 100ms buffer ensures session config applies first
-    };
+        console.log(`[${callSid}] 🗣️ Initial greeting triggered`);
+      }
+    }, 100);
 
     openaiWs.onmessage = (event) => {
       const data = JSON.parse(event.data);
