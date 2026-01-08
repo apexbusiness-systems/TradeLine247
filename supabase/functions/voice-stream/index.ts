@@ -382,26 +382,37 @@ async function connectToOpenAIWithTimeout(apiKey: string, callSid: string): Prom
 
     openaiWs.onopen = () => {
       console.log('✅ Connected to OpenAI Realtime API');
-      
-      // Configure session
-      openaiWs.send(JSON.stringify({
+
+      // 1. Configure Session: Enable "Ear" (VAD)
+      const sessionUpdate = {
         type: 'session.update',
         session: {
+          voice: 'shimmer',
+          instructions: systemPrompt || "You are a helpful AI assistant for TradeLine 24/7.",
           modalities: ['text', 'audio'],
-          instructions: systemPrompt,
-          voice: preset.voice,
           input_audio_format: 'g711_ulaw',
           output_audio_format: 'g711_ulaw',
           turn_detection: {
-            type: 'server_vad',
+            type: 'server_vad', // <--- CRITICAL FIX: Enables listening
             threshold: 0.5,
             prefix_padding_ms: 300,
-            silence_duration_ms: 1000
-          },
-          temperature: 0.8,
-          max_response_output_tokens: 'inf'
+            silence_duration_ms: 600
+          }
         }
-      }));
+      };
+      openaiWs.send(JSON.stringify(sessionUpdate));
+
+      // 2. Trigger Greeting: Enable "Voice" (Break Deadlock)
+      setTimeout(() => {
+        const initialGreeting = {
+          type: 'response.create',
+          response: {
+            modalities: ['text', 'audio'],
+            instructions: "Say exactly: 'Hello! Thanks for calling TradeLine 24/7. How can I help you secure funding today?'"
+          }
+        };
+        openaiWs.send(JSON.stringify(initialGreeting));
+      }, 100); // 100ms buffer ensures session config applies first
     };
 
     openaiWs.onmessage = (event) => {
