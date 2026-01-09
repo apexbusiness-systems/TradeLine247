@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { performSafetyCheck, sanitizeForLogging, type SafetyConfig } from "../_shared/voiceSafety.ts";
 import { classifyObjection, getObjectionContext } from "../_shared/objectionClassifier.ts";
 import { validateTwilioSignature } from "../_shared/twilioValidator.ts";
+import { verifyStreamToken } from "../_shared/stream_token.ts";
 import {
   redactSensitive,
   categorizeCall,
@@ -67,6 +68,22 @@ async function validateTwilioWebSocket(req: Request): Promise<boolean> {
   const signature = req.headers.get('X-Twilio-Signature') || req.headers.get('x-twilio-signature');
   const url = new URL(req.url);
 
+  // CRITICAL FIX: Check for stream token authentication first
+  // This allows voice-answer to connect via HMAC token without Twilio signature
+  const streamToken = url.searchParams.get('streamToken');
+  if (streamToken) {
+    const secret = Deno.env.get('VOICE_STREAM_SECRET') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    if (secret) {
+      const result = await verifyStreamToken(secret, streamToken);
+      if (result.ok) {
+        console.log(`✅ Stream token validated for call: ${result.callSid}`);
+        return true;
+      }
+      console.warn(`⚠️ Stream token validation failed: ${result.reason}`);
+    }
+  }
+
+  // Fallback to Twilio signature validation
   if (!signature) {
     if (!isProd && (allowInsecure || isLocalTestingHost(url.hostname))) {
       console.warn('⚠️  DEV MODE: Bypassing Twilio signature for websocket');
@@ -454,6 +471,23 @@ async function connectToOpenAIWithTimeout(apiKey: string, callSid: string): Prom
         openaiWs.send(JSON.stringify(initialGreeting));
       }, 100); // 100ms buffer ensures session config applies first
     };
+    openaiWs.send(JSON.stringify(sessionUpdate));
+    console.log(`[${callSid}] ✅ Session configured with server_vad`);
+
+    // 2. Trigger Initial Greeting (with small delay to ensure session config applies)
+    setTimeout(() => {
+      if (openaiWs.readyState === WebSocket.OPEN) {
+        const initialGreeting = {
+          type: 'response.create',
+          response: {
+            modalities: ['text', 'audio'],
+            instructions: "Say exactly: 'Hello! Thanks for calling TradeLine 24/7. How can I help you secure funding today?'"
+          }
+        };
+        openaiWs.send(JSON.stringify(initialGreeting));
+        console.log(`[${callSid}] 🗣️ Initial greeting triggered`);
+      }
+    }, 100);
 
     openaiWs.onmessage = (event) => {
       messageCount++; // Increment message counter

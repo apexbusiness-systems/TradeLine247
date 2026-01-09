@@ -43,6 +43,7 @@ const TeamInvite = lazy(() => import("./pages/TeamInvite"));
 const PhoneApps = lazy(() => import("./pages/PhoneApps"));
 const ForwardingWizard = lazy(() => import("./routes/ForwardingWizard"));
 const PreviewHealth = lazy(() => import("./pages/PreviewHealth"));
+const VoiceMonitoring = lazy(() => import("./pages/internal/VoiceMonitoring"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const routeEntries: Array<{ path: string; element: React.ReactNode }> = [
@@ -87,6 +88,14 @@ const routeEntries: Array<{ path: string; element: React.ReactNode }> = [
   { path: paths.voiceHealth, element: <VoiceHealth /> },
   { path: paths.twilioEvidence, element: <TwilioEvidence /> },
   { path: paths.previewHealth, element: <PreviewHealth /> },
+  {
+    path: paths.voiceMonitoring,
+    element: (
+      <RequireAuth>
+        <VoiceMonitoring />
+      </RequireAuth>
+    ),
+  },
   { path: paths.notFound, element: <NotFound /> },
   { path: "/splash", element: <Navigate replace to="/" /> },
 ];

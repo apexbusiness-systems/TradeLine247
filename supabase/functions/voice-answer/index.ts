@@ -19,23 +19,24 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-    // Hotline configuration - assistant-first mode
+    // Hotline configuration - assistant-first mode (NO HUMAN IN LOOP)
     const HOTLINE_DID = Deno.env.get('HOTLINE_DID') || '+15877428885';
-    const HOTLINE_ASSISTANT_ONLY = (Deno.env.get('HOTLINE_ASSISTANT_ONLY') || 'false') === 'true';
+    const HOTLINE_ASSISTANT_ONLY = (Deno.env.get('HOTLINE_ASSISTANT_ONLY') || 'true') === 'true'; // DEFAULT: AI-only
     const VOICE_STREAM_SECRET = Deno.env.get('VOICE_STREAM_SECRET') || supabaseServiceKey;
     const HOTLINE_ALERT_WEBHOOK = Deno.env.get('HOTLINE_ALERT_WEBHOOK');
 
-    if (!FORWARD_TARGET_E164) {
-      throw new Error('Missing required environment variables');
+    // BUSINESS_TARGET_E164 is only required if NOT in hotline-only mode
+    if (!HOTLINE_ASSISTANT_ONLY && !FORWARD_TARGET_E164) {
+      throw new Error('BUSINESS_TARGET_E164 required when HOTLINE_ASSISTANT_ONLY is false');
     }
 
     if (!VOICE_STREAM_SECRET) {
       throw new Error('VOICE_STREAM_SECRET must be set for secure stream authentication');
     }
 
-    // CRITICAL: Enforce E.164 format for bridge target
+    // Only validate E.164 format if we have a forward target (non-hotline mode)
     const e164Regex = /^\+[1-9]\d{1,14}$/;
-    if (!e164Regex.test(FORWARD_TARGET_E164)) {
+    if (FORWARD_TARGET_E164 && !e164Regex.test(FORWARD_TARGET_E164)) {
       console.error('CRITICAL: BUSINESS_TARGET_E164 is not in valid E.164 format:', FORWARD_TARGET_E164);
       throw new Error('Invalid bridge target configuration - must be E.164 format');
     }
@@ -155,10 +156,11 @@ Deno.serve(async (req) => {
     const isHotline = (To === HOTLINE_DID) || HOTLINE_ASSISTANT_ONLY;
 
     // Helper to create secure stream URL with short-lived HMAC token
+    // CRITICAL FIX: Route to voice-stream (WebSocket handler), NOT enhanced-voice-stream (HTTP only)
     async function makeStreamUrl(callSid: string): Promise<string> {
       const token = await createStreamToken(VOICE_STREAM_SECRET, callSid, 3 * 60 * 1000); // 3m TTL
       const base = supabaseUrl.replace('https://', '');
-      return `wss://${base}/functions/v1/enhanced-voice-stream?callSid=${callSid}&streamToken=${token}`;
+      return `wss://${base}/functions/v1/voice-stream?callSid=${callSid}&streamToken=${token}`;
     }
 
     console.log('Incoming call:', { CallSid, From, To, AnsweredBy, isHotline });
