@@ -419,33 +419,14 @@ async function connectToOpenAIWithTimeout(apiKey: string, callSid: string): Prom
     openaiWs = await connectToOpenAIWithTimeout(OPENAI_API_KEY, callSid);
 
     openaiWs.onopen = () => {
-      openaiConnectTime = Date.now(); // Capture OpenAI connection time
-      console.log(`✅ Connected to OpenAI Realtime API (${openaiConnectTime - (twilioStartTime || 0)}ms from Twilio start)`);
-
-      // Build context injection for conversation state preservation
-      let contextInjection = '';
-      if (Object.keys(conversationState).length > 0) {
-        const contextParts = [];
-        if (conversationState.caller_name) contextParts.push(`caller name: ${conversationState.caller_name}`);
-        if (conversationState.callback_number) contextParts.push(`callback number: ${conversationState.callback_number}`);
-        if (conversationState.email) contextParts.push(`email: ${conversationState.email}`);
-        if (conversationState.job_summary) contextParts.push(`job summary: ${conversationState.job_summary}`);
-        if (conversationState.preferred_datetime) contextParts.push(`preferred time: ${conversationState.preferred_datetime}`);
-        if (conversationState.consent_recording !== undefined) contextParts.push(`recording consent: ${conversationState.consent_recording}`);
-        if (conversationState.consent_sms_opt_in !== undefined) contextParts.push(`SMS consent: ${conversationState.consent_sms_opt_in}`);
-        if (conversationState.call_category) contextParts.push(`call category: ${conversationState.call_category}`);
-
-        if (contextParts.length > 0) {
-          contextInjection = `\n\n[CONVERSATION CONTEXT - DO NOT REPEAT TO USER]\nPreviously captured information: ${contextParts.join(', ')}\nUse this context to provide personalized, non-repetitive responses.`;
-        }
-      }
+      console.log('✅ Connected to OpenAI Realtime API');
 
       // 1. Configure Session: Enable "Ear" (VAD)
       const sessionUpdate = {
         type: 'session.update',
         session: {
           voice: 'shimmer',
-          instructions: (systemPrompt || "You are a helpful AI assistant for TradeLine 24/7.") + contextInjection,
+          instructions: systemPrompt || "You are a helpful AI assistant for TradeLine 24/7.",
           modalities: ['text', 'audio'],
           input_audio_format: 'g711_ulaw',
           output_audio_format: 'g711_ulaw',
@@ -453,7 +434,7 @@ async function connectToOpenAIWithTimeout(apiKey: string, callSid: string): Prom
             type: 'server_vad', // <--- CRITICAL FIX: Enables listening
             threshold: 0.5,
             prefix_padding_ms: 300,
-            silence_duration_ms: 450 // Optimized: 450ms balances barge-in responsiveness vs accidental interruptions
+            silence_duration_ms: 600
           }
         }
       };
