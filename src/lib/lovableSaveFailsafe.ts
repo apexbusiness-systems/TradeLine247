@@ -12,7 +12,7 @@
  * - Error recovery and reporting
  */
 
-import { reportError } from './reportError';
+import { errorReporter } from './errorReporter';
 
 export interface SaveAttempt {
   id: string;
@@ -119,7 +119,16 @@ class LovableSaveFailsafe {
       this.queueSave(attempt);
       
       // Report error
-      reportError(error, 'lovable-save-failsafe');
+      errorReporter.report({
+        type: 'error',
+        message: `Lovable save failed: ${error instanceof Error ? error.message : String(error)}`,
+        stack: error instanceof Error ? error.stack : undefined,
+        timestamp: new Date().toISOString(),
+        url: typeof window !== 'undefined' ? window.location.href : '',
+        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
+        environment: 'unknown',
+        metadata: { context: 'lovable-save-failsafe' }
+      });
       
       return false;
     }
