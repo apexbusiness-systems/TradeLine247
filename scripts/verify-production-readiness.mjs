@@ -123,7 +123,7 @@ const functionsDir = join(ROOT, 'supabase/functions');
 if (existsSync(functionsDir)) {
   const requiredFunctions = [
     'create-booking',
-    'health-check',
+    'healthz',
     'send-booking-confirmation',
   ];
 
