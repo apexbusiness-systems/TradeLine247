@@ -26,6 +26,34 @@ interface VoiceHealth {
     error_5xx: number;
     total: number;
   };
+  voiceMetrics: {
+    handshake_latency: {
+      avg_ms: number;
+      p50_ms: number;
+      p95_ms: number;
+      p99_ms: number;
+      count: number;
+    };
+    first_byte_latency: {
+      avg_ms: number;
+      p50_ms: number;
+      p95_ms: number;
+      p99_ms: number;
+      count: number;
+    };
+    message_throughput: {
+      avg_per_call: number;
+      total_messages: number;
+      total_calls: number;
+    };
+    silence_nudges: {
+      avg_per_call: number;
+      total_nudges: number;
+      frequency_per_minute: number;
+    };
+    fallback_rate: number;
+    total_streams: number;
+  };
   lastCheck: string;
 }
 
@@ -321,6 +349,116 @@ export default function VoiceHealth() {
                   </div>
                 </div>
               )}
+            </CardContent>
+          </Card>
+
+          {/* Enhanced Voice Metrics Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Voice Stream Metrics (24h Window)</CardTitle>
+              <CardDescription>Real-time performance and latency metrics</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {/* Handshake Latency */}
+                <div className="space-y-2">
+                  <div className="text-sm font-semibold">Handshake Latency</div>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                      <div className="text-xs text-muted-foreground">Avg</div>
+                      <div className="font-mono">{health.voiceMetrics.handshake_latency.avg_ms}ms</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground">P95</div>
+                      <div className="font-mono">{health.voiceMetrics.handshake_latency.p95_ms}ms</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground">P99</div>
+                      <div className="font-mono">{health.voiceMetrics.handshake_latency.p99_ms}ms</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground">Count</div>
+                      <div className="font-mono">{health.voiceMetrics.handshake_latency.count}</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* First Byte Latency */}
+                <div className="space-y-2">
+                  <div className="text-sm font-semibold">First Byte Latency</div>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                      <div className="text-xs text-muted-foreground">Avg</div>
+                      <div className="font-mono">{health.voiceMetrics.first_byte_latency.avg_ms}ms</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground">P95</div>
+                      <div className="font-mono">{health.voiceMetrics.first_byte_latency.p95_ms}ms</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground">P99</div>
+                      <div className="font-mono">{health.voiceMetrics.first_byte_latency.p99_ms}ms</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground">Count</div>
+                      <div className="font-mono">{health.voiceMetrics.first_byte_latency.count}</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Message Throughput */}
+                <div className="space-y-2">
+                  <div className="text-sm font-semibold">Message Throughput</div>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                      <div className="text-xs text-muted-foreground">Avg/Call</div>
+                      <div className="font-mono">{health.voiceMetrics.message_throughput.avg_per_call}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground">Total</div>
+                      <div className="font-mono">{health.voiceMetrics.message_throughput.total_messages}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground">Calls</div>
+                      <div className="font-mono">{health.voiceMetrics.message_throughput.total_calls}</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Silence Nudges */}
+                <div className="space-y-2">
+                  <div className="text-sm font-semibold">Silence Detection</div>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                      <div className="text-xs text-muted-foreground">Avg/Call</div>
+                      <div className="font-mono">{health.voiceMetrics.silence_nudges.avg_per_call}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground">Total</div>
+                      <div className="font-mono">{health.voiceMetrics.silence_nudges.total_nudges}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground">Freq/Min</div>
+                      <div className="font-mono">{health.voiceMetrics.silence_nudges.frequency_per_minute}</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Fallback Rate */}
+                <div className="space-y-2">
+                  <div className="text-sm font-semibold">Stream Health</div>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                      <div className="text-xs text-muted-foreground">Fallback Rate</div>
+                      <div className="font-mono">{health.voiceMetrics.fallback_rate}%</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground">Total Streams</div>
+                      <div className="font-mono">{health.voiceMetrics.total_streams}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </>
