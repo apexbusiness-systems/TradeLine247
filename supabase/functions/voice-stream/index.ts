@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { getSystemPrompt } from "../_shared/promptLoader.ts";
+import { ADELINE_PROMPT, LISA_PROMPT, CHRISTY_PROMPT } from "../_shared/personas.ts";
 
 serve(async (req) => {
   if (req.headers.get("upgrade") !== "websocket") {
@@ -14,24 +14,6 @@ serve(async (req) => {
     `openai-insecure-api-key.${Deno.env.get("OPENAI_API_KEY")}`,
     "openai-beta.realtime-v1",
   ]);
-
-  // Load Personas
-  let ADELINE_PROMPT = "";
-  let LISA_PROMPT = "";
-  let CHRISTY_PROMPT = "";
-
-  // Preload prompts
-  try {
-    ADELINE_PROMPT = await getSystemPrompt("Adeline");
-    LISA_PROMPT = await getSystemPrompt("Lisa");
-    CHRISTY_PROMPT = await getSystemPrompt("Christy");
-  } catch (e) {
-    console.error("Failed to load personas:", e);
-    // Fallback if file load fails
-    ADELINE_PROMPT = "You are Adeline, the receptionist.";
-    LISA_PROMPT = "You are Lisa, sales specialist.";
-    CHRISTY_PROMPT = "You are Christy, support specialist.";
-  }
 
   // Definition of tools
   const tools = [
