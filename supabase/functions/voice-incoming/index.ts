@@ -1,9 +1,43 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { validateTwilioSignature } from "../_shared/twilio_sig.ts";
+import { ensureRequestId } from "../_shared/requestId.ts";
 
 // Test allowlist for receptionist mode (environment variable)
 const TEST_ALLOWLIST = Deno.env.get("VOICE_TEST_ALLOWLIST")?.split(",") || [];
+
+// In-memory rate limiting (Edge-compatible, per-isolate)
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT_WINDOW_MS = 60000; // 1 minute
+const MAX_REQUESTS_PER_WINDOW = 30; // Higher limit for inbound calls
+
+function checkRateLimit(identifier: string): boolean {
+  const now = Date.now();
+  const record = rateLimitMap.get(identifier);
+
+  if (!record || now > record.resetAt) {
+    rateLimitMap.set(identifier, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return true;
+  }
+
+  if (record.count >= MAX_REQUESTS_PER_WINDOW) {
+    return false;
+  }
+
+  record.count++;
+  return true;
+}
+
+// Cleanup old entries periodically
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, record] of rateLimitMap.entries()) {
+    if (now > record.resetAt) {
+      rateLimitMap.delete(key);
+    }
+  }
+}, RATE_LIMIT_WINDOW_MS);
 
 async function markVerified(toE164: string) {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -82,6 +116,32 @@ function isTestNumber(fromNumber: string): boolean {
 }
 
 export default async (req: Request) => {
+  const requestId = ensureRequestId(req.headers);
+
+  // SECURITY: Validate Twilio webhook signature to prevent spoofing attacks
+  if (!(await validateTwilioSignature(req.clone()))) {
+    console.error(`[voice-incoming][${requestId}] Invalid Twilio signature - rejecting request`);
+    return new Response(
+      JSON.stringify({ error: 'Forbidden - Invalid Twilio signature', requestId }),
+      { status: 403, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+
+  // Rate limiting by IP address
+  const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+  if (!checkRateLimit(clientIp)) {
+    console.warn(`[voice-incoming][${requestId}] Rate limit exceeded for IP: ${clientIp}`);
+    const rateLimitTwiML = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="Polly.Joanna">We're experiencing high call volume. Please try again later.</Say>
+  <Hangup/>
+</Response>`;
+    return new Response(rateLimitTwiML, {
+      status: 429,
+      headers: { 'Content-Type': 'text/xml' }
+    });
+  }
+
   const body = await req.text();
   const p = new URLSearchParams(body);
   const callData: {

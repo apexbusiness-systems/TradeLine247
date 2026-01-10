@@ -1,14 +1,12 @@
-name: db/migrate
+name: migrate
+
 on:
-  workflow_dispatch:
   push:
-    branches: [main]
+    branches:
+      - main
     paths:
-      - supabase/migrations/**
-  pull_request:
-    branches: [main]
-    paths:
-      - supabase/migrations/**
+      - 'supabase/migrations/**'
+  workflow_dispatch: # Allow manual trigger
 
 jobs:
   migrate:

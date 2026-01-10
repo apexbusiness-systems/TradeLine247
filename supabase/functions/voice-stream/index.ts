@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { performSafetyCheck, sanitizeForLogging, type SafetyConfig } from "../_shared/voiceSafety.ts";
 import { classifyObjection, getObjectionContext } from "../_shared/objectionClassifier.ts";
 import { validateTwilioSignature } from "../_shared/twilioValidator.ts";
+import { verifyStreamToken } from "../_shared/stream_token.ts";
 import {
   redactSensitive,
   categorizeCall,
@@ -18,6 +19,28 @@ import {
 
 const LOCAL_BYPASS_HOSTS = ['localhost', '127.0.0.1'];
 const LOCAL_BYPASS_SUFFIXES = ['ngrok.io', 'ngrok-free.app'];
+
+// OpenAI timeout configuration
+const OPENAI_TIMEOUT_MS = 25000; // 25s safety margin (Twilio allows 30s max)
+
+// Fallback TwiML responses for timeout scenarios
+const FALLBACK_TWIML = {
+  TECHNICAL_DIFFICULTY: `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="alice">I apologize, I'm having technical difficulties right now. Let me take a message for you.</Say>
+  <Say voice="alice">Please state your name, company, and phone number after the beep, and we'll call you back shortly.</Say>
+  <Record maxLength="60" transcribe="true" transcribeCallback="/functions/v1/voice-recording-status"/>
+  <Say voice="alice">Thank you. We'll be in touch soon.</Say>
+  <Hangup/>
+</Response>`,
+
+  HIGH_VOLUME: `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="alice">We're experiencing high call volume. Please leave a message after the beep.</Say>
+  <Record maxLength="60" transcribe="true" transcribeCallback="/functions/v1/voice-recording-status"/>
+  <Hangup/>
+</Response>`
+};
 
 function isLocalTestingHost(hostname: string): boolean {
   if (LOCAL_BYPASS_HOSTS.includes(hostname)) return true;
@@ -45,6 +68,22 @@ async function validateTwilioWebSocket(req: Request): Promise<boolean> {
   const signature = req.headers.get('X-Twilio-Signature') || req.headers.get('x-twilio-signature');
   const url = new URL(req.url);
 
+  // CRITICAL FIX: Check for stream token authentication first
+  // This allows voice-answer to connect via HMAC token without Twilio signature
+  const streamToken = url.searchParams.get('streamToken');
+  if (streamToken) {
+    const secret = Deno.env.get('VOICE_STREAM_SECRET') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    if (secret) {
+      const result = await verifyStreamToken(secret, streamToken);
+      if (result.ok) {
+        console.log(`✅ Stream token validated for call: ${result.callSid}`);
+        return true;
+      }
+      console.warn(`⚠️ Stream token validation failed: ${result.reason}`);
+    }
+  }
+
+  // Fallback to Twilio signature validation
   if (!signature) {
     if (!isProd && (allowInsecure || isLocalTestingHost(url.hostname))) {
       console.warn('⚠️  DEV MODE: Bypassing Twilio signature for websocket');
@@ -122,7 +161,7 @@ OUTPUT:
 VOICE + TONE: Warm, calm, precise, human. Speak Canadian English naturally. Keep responses under 15 seconds.
 
 CORE PRINCIPLES:
-1. Brevity: Concise and respectful of caller's time
+1. Brevity: Reply in under 2 sentences to prevent audio overlap and improve conversational flow
 2. Accuracy: Never invent data - if unsure, ask or acknowledge unknown
 3. Confirmation: Always read back captured information
 4. Human Handoff: Offer immediately if requested, urgent, or sentiment is negative
@@ -239,7 +278,7 @@ async function getEnhancedPreset(supabase: any, presetId: string | null, config:
 
 Deno.serve(async (req) => {
   const upgrade = req.headers.get("upgrade") || "";
-  
+
   if (upgrade.toLowerCase() !== "websocket") {
     return new Response("Expected websocket connection", { status: 426 });
   }
@@ -252,7 +291,7 @@ Deno.serve(async (req) => {
   const { socket, response } = Deno.upgradeWebSocket(req);
   const url = new URL(req.url);
   const callSid = url.searchParams.get('callSid');
-  
+
   if (!callSid) {
     socket.close(1008, 'Missing callSid');
     return response;
@@ -262,7 +301,7 @@ Deno.serve(async (req) => {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const enforcementMode = (Deno.env.get('SAFETY_ENFORCEMENT_MODE') || 'log').toLowerCase();
-  
+
   if (!OPENAI_API_KEY) {
     socket.close(1011, 'OpenAI API key not configured');
     return response;
@@ -300,6 +339,27 @@ Deno.serve(async (req) => {
   const safetyConfig = preset.safety_guardrails;
   let silenceCheckInterval: ReturnType<typeof setInterval> | undefined;
 
+  // Enhanced telemetry tracking
+  let twilioStartTime: number | null = Date.now(); // Capture Twilio WebSocket connection time
+  let openaiConnectTime: number | null = null;
+  let userSpeechEndTime: number | null = null;
+  let firstAIAudioTime: number | null = null;
+  let messageCount = 0;
+  let silenceNudges = 0;
+
+  // Ephemeral state object for conversation context preservation
+  const conversationState: {
+    caller_name?: string;
+    callback_number?: string;
+    email?: string;
+    job_summary?: string;
+    preferred_datetime?: string;
+    consent_recording?: boolean;
+    consent_sms_opt_in?: boolean;
+    call_category?: string;
+    last_turn_summary?: string;
+  } = {};
+
   // Compliance tracking state
   let recordingMode: 'full' | 'no_record' = 'full' as 'full' | 'no_record'; // Default to full, switch to no_record if consent denied
   let consentRecording: boolean | null = null; // null = not yet asked
@@ -315,48 +375,112 @@ Deno.serve(async (req) => {
     call_category: 'lead_capture'
   };
 
-  // Connect to OpenAI Realtime API
-  try {
-    openaiWs = new WebSocket(
-      'wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17',
-      {
-        headers: {
-          'Authorization': `Bearer ${OPENAI_API_KEY}`,
-          'OpenAI-Beta': 'realtime=v1'
+// Helper: Connect to OpenAI with timeout fallback
+async function connectToOpenAIWithTimeout(apiKey: string, callSid: string): Promise<WebSocket> {
+  return new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      console.error(`[${callSid}] OpenAI connection timeout after ${OPENAI_TIMEOUT_MS}ms`);
+      reject(new Error('OpenAI connection timeout'));
+    }, OPENAI_TIMEOUT_MS);
+
+    try {
+      const ws = new WebSocket(
+        'wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17',
+        {
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'OpenAI-Beta': 'realtime=v1'
+          }
         }
-      }
-    );
+      );
+
+      ws.onopen = () => {
+        clearTimeout(timeoutId);
+        console.log(`[${callSid}] ✅ Connected to OpenAI Realtime API`);
+        resolve(ws);
+      };
+
+      ws.onerror = (error) => {
+        clearTimeout(timeoutId);
+        console.error(`[${callSid}] OpenAI WebSocket connection error:`, error);
+        reject(new Error('OpenAI WebSocket connection failed'));
+      };
+
+    } catch (error) {
+      clearTimeout(timeoutId);
+      console.error(`[${callSid}] Failed to create OpenAI WebSocket:`, error);
+      reject(error);
+    }
+  });
+}
+
+// Connect to OpenAI Realtime API with timeout handling
+  try {
+    openaiWs = await connectToOpenAIWithTimeout(OPENAI_API_KEY, callSid);
 
     openaiWs.onopen = () => {
       console.log('✅ Connected to OpenAI Realtime API');
-      
-      // Configure session
-      openaiWs.send(JSON.stringify({
+
+      // 1. Configure Session: Enable "Ear" (VAD)
+      const sessionUpdate = {
         type: 'session.update',
         session: {
+          voice: 'shimmer',
+          instructions: systemPrompt || "You are a helpful AI assistant for TradeLine 24/7.",
           modalities: ['text', 'audio'],
-          instructions: systemPrompt,
-          voice: preset.voice,
           input_audio_format: 'g711_ulaw',
           output_audio_format: 'g711_ulaw',
           turn_detection: {
-            type: 'server_vad',
+            type: 'server_vad', // <--- CRITICAL FIX: Enables listening
             threshold: 0.5,
             prefix_padding_ms: 300,
-            silence_duration_ms: 1000
-          },
-          temperature: 0.8,
-          max_response_output_tokens: 'inf'
+            silence_duration_ms: 600
+          }
         }
-      }));
+      };
+      openaiWs.send(JSON.stringify(sessionUpdate));
+
+      // 2. Trigger Greeting: Enable "Voice" (Break Deadlock)
+      setTimeout(() => {
+        const initialGreeting = {
+          type: 'response.create',
+          response: {
+            modalities: ['text', 'audio'],
+            instructions: "Say exactly: 'Hello! Thanks for calling TradeLine 24/7. How can I help you secure funding today?'"
+          }
+        };
+        openaiWs.send(JSON.stringify(initialGreeting));
+      }, 100); // 100ms buffer ensures session config applies first
     };
+    openaiWs.send(JSON.stringify(sessionUpdate));
+    console.log(`[${callSid}] ✅ Session configured with server_vad`);
+
+    // 2. Trigger Initial Greeting (with small delay to ensure session config applies)
+    setTimeout(() => {
+      if (openaiWs.readyState === WebSocket.OPEN) {
+        const initialGreeting = {
+          type: 'response.create',
+          response: {
+            modalities: ['text', 'audio'],
+            instructions: "Say exactly: 'Hello! Thanks for calling TradeLine 24/7. How can I help you secure funding today?'"
+          }
+        };
+        openaiWs.send(JSON.stringify(initialGreeting));
+        console.log(`[${callSid}] 🗣️ Initial greeting triggered`);
+      }
+    }, 100);
 
     openaiWs.onmessage = (event) => {
+      messageCount++; // Increment message counter
       const data = JSON.parse(event.data);
       lastActivityTime = Date.now();
 
       // Handle different event types
       if (data.type === 'response.audio.delta' && streamSid) {
+        // Capture first AI audio time
+        if (firstAIAudioTime === null) {
+          firstAIAudioTime = Date.now();
+        }
         // Forward audio to Twilio
         socket.send(JSON.stringify({
           event: 'media',
@@ -368,6 +492,8 @@ Deno.serve(async (req) => {
       } else if (data.type === 'response.audio_transcript.delta') {
         transcript += data.delta;
       } else if (data.type === 'conversation.item.input_audio_buffer.committed') {
+        // Capture user speech end time for first-byte latency calculation
+        userSpeechEndTime = Date.now();
         // User speech committed - perform safety check (enhanced feature)
         if (data.item?.transcript && safetyConfig) {
           const userText = data.item.transcript;
@@ -477,7 +603,18 @@ Deno.serve(async (req) => {
         // Extract captured fields from response
         if (data.response?.output) {
           try {
-            capturedFields = JSON.parse(data.response.output);
+            const responseOutput = JSON.parse(data.response.output);
+            capturedFields = responseOutput;
+
+            // Store captured fields in conversation state for context preservation
+            if (responseOutput.caller_name) conversationState.caller_name = responseOutput.caller_name;
+            if (responseOutput.callback_number) conversationState.callback_number = responseOutput.callback_number;
+            if (responseOutput.email) conversationState.email = responseOutput.email;
+            if (responseOutput.job_summary) conversationState.job_summary = responseOutput.job_summary;
+            if (responseOutput.preferred_datetime) conversationState.preferred_datetime = responseOutput.preferred_datetime;
+            if (responseOutput.consent_recording !== undefined) conversationState.consent_recording = responseOutput.consent_recording;
+            if (responseOutput.consent_sms_opt_in !== undefined) conversationState.consent_sms_opt_in = responseOutput.consent_sms_opt_in;
+            if (responseOutput.call_category) conversationState.call_category = responseOutput.call_category;
           } catch {}
         }
       } else if (data.type === 'error') {
@@ -554,10 +691,11 @@ Deno.serve(async (req) => {
   // Silence detection (6s threshold)
   silenceCheckInterval = setInterval(() => {
     const timeSinceActivity = Date.now() - lastActivityTime;
-    
+
     if (timeSinceActivity > 6000 && openaiWs.readyState === WebSocket.OPEN) {
       console.log('⚠️ Silence detected (>6s), sending nudge');
-      
+      silenceNudges++; // Increment silence nudge counter
+
       openaiWs.send(JSON.stringify({
         type: 'conversation.item.create',
         item: {
@@ -569,7 +707,7 @@ Deno.serve(async (req) => {
           }]
         }
       }));
-      
+
       openaiWs.send(JSON.stringify({ type: 'response.create' }));
       
       // If no response after nudge, bridge to human
@@ -630,11 +768,48 @@ Deno.serve(async (req) => {
     } else if (data.event === 'stop') {
       console.log('📞 Call ended');
 
-      // Calculate conversation metrics
+      // Calculate final metrics and log structured telemetry
       const conversationDuration = Math.floor((Date.now() - conversationStartTime) / 1000);
       const avgSentiment = sentimentHistory.length > 0
         ? sentimentHistory.reduce((a, b) => a + b, 0) / sentimentHistory.length
         : null;
+
+      // Calculate first-byte latency: time from user speech end to first AI audio
+      const firstByteLatency = (userSpeechEndTime && firstAIAudioTime)
+        ? firstAIAudioTime - userSpeechEndTime
+        : null;
+
+      // Structured telemetry logging (JSON format for easy parsing)
+      const telemetryData = {
+        call_sid: callSid,
+        twilio_start: twilioStartTime,
+        openai_connect: openaiConnectTime,
+        first_byte_latency_ms: firstByteLatency,
+        message_count: messageCount,
+        silence_nudges: silenceNudges,
+        conversation_duration_s: conversationDuration,
+        turn_count: turnCount,
+        avg_sentiment: avgSentiment,
+        call_category: callCategory,
+        recording_mode: recordingMode,
+        timestamp: new Date().toISOString()
+      };
+
+      console.log(`📊 VOICE_TELEMETRY: ${JSON.stringify(telemetryData)}`);
+
+      // Update voice_stream_logs with enhanced metrics
+      await supabase.from('voice_stream_logs').upsert({
+        call_sid: callSid,
+        started_at: twilioStartTime ? new Date(twilioStartTime).toISOString() : null,
+        connected_at: openaiConnectTime ? new Date(openaiConnectTime).toISOString() : null,
+        elapsed_ms: (twilioStartTime && openaiConnectTime) ? (openaiConnectTime - twilioStartTime) : null,
+        fell_back: false,
+        twilio_start_ms: twilioStartTime,
+        openai_connect_ms: openaiConnectTime,
+        first_byte_latency_ms: firstByteLatency,
+        message_count: messageCount,
+        silence_nudges: silenceNudges
+      }, { onConflict: 'call_sid' }).then();
 
       // Determine call category from conversation
       const detectedCategory = categorizeCall({ text: userTranscript });

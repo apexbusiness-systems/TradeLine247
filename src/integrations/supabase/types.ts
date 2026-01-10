@@ -4565,7 +4565,12 @@ export type Database = {
           elapsed_ms: number | null
           error_message: string | null
           fell_back: boolean
+          first_byte_latency_ms: number | null
+          message_count: number | null
+          openai_connect_ms: number | null
+          silence_nudges: number | null
           started_at: string
+          twilio_start_ms: number | null
         }
         Insert: {
           call_sid: string
@@ -4574,7 +4579,12 @@ export type Database = {
           elapsed_ms?: number | null
           error_message?: string | null
           fell_back?: boolean
+          first_byte_latency_ms?: number | null
+          message_count?: number | null
+          openai_connect_ms?: number | null
+          silence_nudges?: number | null
           started_at?: string
+          twilio_start_ms?: number | null
         }
         Update: {
           call_sid?: string
@@ -4583,7 +4593,12 @@ export type Database = {
           elapsed_ms?: number | null
           error_message?: string | null
           fell_back?: boolean
+          first_byte_latency_ms?: number | null
+          message_count?: number | null
+          openai_connect_ms?: number | null
+          silence_nudges?: number | null
           started_at?: string
+          twilio_start_ms?: number | null
         }
         Relationships: []
       }

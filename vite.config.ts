@@ -16,11 +16,12 @@ export default defineConfig(({ mode }: ConfigEnv) => ({
       name: 'csp-headers',
       configureServer(server: any) {
         server.middlewares.use((req: any, res: any, next: any) => {
+          // SECURITY: Removed 'unsafe-eval' to prevent arbitrary code execution
           res.setHeader(
             'Content-Security-Policy',
             [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net",
+              "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
               "img-src 'self' data: https:",
