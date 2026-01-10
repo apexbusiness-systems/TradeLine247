@@ -32,23 +32,13 @@ jobs:
 
       - name: 🐘 Run Database Migrations
         shell: bash
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
           echo "🚀 Starting Stateless Migration..."
-
-          # Determine DB URL
-          DB_URL="${SUPABASE_DB_URL:-$DATABASE_URL}"
-
-          if [[ -z "$DB_URL" ]]; then
-            echo "❌ Error: SUPABASE_DB_URL (and DATABASE_URL fallback) is not set."
-            echo "Please configure the 'SUPABASE_DB_URL' secret in your repository settings."
-            echo "Format: postgres://postgres:[password]@db.[ref].supabase.co:5432/postgres?options=endpoint%3Dpooler-session"
-            exit 1
-          fi
-
           echo "Supabase CLI version: $(supabase --version)"
 
-          # Execute migration
+          # Explicitly pass the db-url flag if the env var isn't auto-picked up
           # Using --no-verify to skip local shadow DB creation if Docker is unavailable/flaky in CI
-          # This helps avoid 'failed to connect to host' errors when shadow DB fails to start.
-          set +x
-          supabase db push --include-all --db-url "$DB_URL"
+          supabase db push --include-all --no-verify --db-url "$SUPABASE_DB_URL"

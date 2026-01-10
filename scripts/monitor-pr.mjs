@@ -4,38 +4,49 @@
  * Checks PR status, CI/CD, and deployment status
  */
 
-import { execSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 
 const PR_BRANCH = 'fix/vercel-a11y-security-pr';
 const REPO = 'apexbusiness-systems/tradeline247aicom';
 
+function run(command, args) {
+  const result = spawnSync(command, args, { encoding: 'utf-8' });
+  if (result.error) {
+    throw result.error;
+  }
+  if (result.status !== 0) {
+    throw new Error(`Command failed with status ${result.status}: ${result.stderr}`);
+  }
+  return result.stdout;
+}
+
 function checkBranchStatus() {
   try {
     console.log('🔍 Checking branch status...\n');
-    
+
     // Check if branch exists
-    const branches = execSync('git branch -r', { encoding: 'utf-8' });
+    const branches = run('git', ['branch', '-r']);
     if (!branches.includes(PR_BRANCH)) {
       console.log('❌ Branch not found on remote');
       return false;
     }
-    
+
     // Check commits ahead
     try {
-      const ahead = execSync(`git rev-list --count origin/main..origin/${PR_BRANCH}`, { encoding: 'utf-8' }).trim();
+      const ahead = run('git', ['rev-list', '--count', `origin/main..origin/${PR_BRANCH}`]).trim();
       console.log(`✅ Branch is ${ahead} commits ahead of main`);
     } catch {
       console.log('⚠️  Could not determine commits ahead');
     }
-    
+
     // Check for uncommitted changes
-    const status = execSync('git status --porcelain', { encoding: 'utf-8' });
+    const status = run('git', ['status', '--porcelain']);
     if (status.trim()) {
       console.log('⚠️  Uncommitted changes detected');
     } else {
       console.log('✅ Working directory clean');
     }
-    
+
     return true;
   } catch (error) {
     console.error('Error checking branch:', error.message);
@@ -45,14 +56,14 @@ function checkBranchStatus() {
 
 async function checkBuildStatus() {
   console.log('\n🔍 Checking build status...\n');
-  
+
   try {
     // Check if production rubric exists
     const fs = await import('node:fs/promises');
     try {
       await fs.access('scripts/production-rubric.mjs');
       console.log('Running production rubric...');
-      const rubric = execSync('node scripts/production-rubric.mjs', { encoding: 'utf-8' });
+      const rubric = run('node', ['scripts/production-rubric.mjs']);
       console.log(rubric);
     } catch {
       console.log('ℹ️  Production rubric not found (optional)');
@@ -67,12 +78,12 @@ async function main() {
   console.log(`Branch: ${PR_BRANCH}`);
   console.log(`Repo: ${REPO}\n`);
   console.log('='.repeat(50));
-  
+
   const branchExists = checkBranchStatus();
-  
+
   if (branchExists) {
     await checkBuildStatus();
-    
+
     console.log('\n' + '='.repeat(50));
     console.log('\n📋 Next Steps:');
     console.log(`1. Create PR: https://github.com/${REPO}/pull/new/${PR_BRANCH}`);
@@ -85,4 +96,3 @@ async function main() {
 }
 
 main();
-
