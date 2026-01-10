@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { validateTwilioSignature } from "../_shared/twilio_sig.ts";
 
 // Test allowlist for receptionist mode (environment variable)
 const TEST_ALLOWLIST = Deno.env.get("VOICE_TEST_ALLOWLIST")?.split(",") || [];
@@ -82,6 +83,15 @@ function isTestNumber(fromNumber: string): boolean {
 }
 
 export default async (req: Request) => {
+  // SECURITY: Validate Twilio webhook signature to prevent spoofing attacks
+  if (!(await validateTwilioSignature(req.clone()))) {
+    console.error('[voice-incoming] Invalid Twilio signature - rejecting request');
+    return new Response(
+      JSON.stringify({ error: 'Forbidden - Invalid Twilio signature' }),
+      { status: 403, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+
   const body = await req.text();
   const p = new URLSearchParams(body);
   const callData: {
