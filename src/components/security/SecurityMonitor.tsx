@@ -50,6 +50,7 @@ const applyConservativeHeaders = () => {
   if (isLocal || isPreview) return;
 
   // Idempotent, conservative CSP — avoids breaking common CDNs and Supabase.
+  // SECURITY: Removed 'unsafe-eval' to prevent arbitrary code execution via eval()
   const csp = [
     "default-src 'self'",
     "base-uri 'self'",
@@ -58,8 +59,8 @@ const applyConservativeHeaders = () => {
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
     "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.resend.com",
-    // If you load inline or evaluated scripts, keep these; otherwise remove to tighten.
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+    // HARDENED: Removed 'unsafe-eval' - modern bundlers don't require it
+    "script-src 'self' 'unsafe-inline'",
     'upgrade-insecure-requests',
   ].join('; ');
   addOrUpdateMeta('Content-Security-Policy', csp, true);

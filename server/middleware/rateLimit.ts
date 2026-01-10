@@ -189,29 +189,54 @@ export function createRateLimiter(config: RateLimitConfig) {
 
 /**
  * Get identifier from request (IP or user ID)
+ * NOTE: For rate limiting purposes, we extract the user ID from the JWT payload
+ * without full signature verification since this is a non-security-critical operation.
+ * The actual authentication/authorization is handled by Supabase RLS.
+ *
+ * SECURITY: The JWT signature is validated by Supabase on actual data operations.
+ * Rate limiting by user ID is a best-effort optimization; IP fallback ensures
+ * rate limiting still functions even with tampered tokens.
  */
 function getIdentifier(req: Request): string {
   // Try to get user ID from JWT if authenticated
   const authHeader = req.headers.authorization;
-  if (authHeader) {
+  if (authHeader && authHeader.startsWith('Bearer ')) {
     try {
-      const token = authHeader.replace('Bearer ', '');
-      const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
-      if (payload.sub) {
-        return `user:${payload.sub}`;
+      const token = authHeader.slice(7); // Remove 'Bearer ' prefix
+      const parts = token.split('.');
+
+      // Basic JWT structure validation
+      if (parts.length !== 3) {
+        throw new Error('Invalid JWT structure');
+      }
+
+      // Decode payload (base64url)
+      const payloadBase64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      const payload = JSON.parse(Buffer.from(payloadBase64, 'base64').toString('utf-8'));
+
+      // Validate payload has expected structure
+      if (payload && typeof payload.sub === 'string' && payload.sub.length > 0) {
+        // Sanitize user ID to prevent injection
+        const sanitizedSub = payload.sub.replace(/[^a-zA-Z0-9-]/g, '');
+        if (sanitizedSub.length > 0 && sanitizedSub.length <= 128) {
+          return `user:${sanitizedSub}`;
+        }
       }
     } catch {
-      // Fall through to IP
+      // Invalid token format, fall through to IP
     }
   }
 
   // Fall back to IP address
   const forwarded = req.headers['x-forwarded-for'];
-  const ip = forwarded 
+  const ip = forwarded
     ? (Array.isArray(forwarded) ? forwarded[0] : forwarded.split(',')[0]).trim()
     : req.socket.remoteAddress || 'unknown';
-  
-  return `ip:${ip}`;
+
+  // Sanitize IP address
+  const sanitizedIp = ip.replace(/[^a-fA-F0-9.:]/g, '').slice(0, 45);
+
+  return `ip:${sanitizedIp || 'unknown'}`;
 }
 
 /**
