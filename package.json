@@ -22,6 +22,7 @@
     "verify:icons": "node scripts/verify_icons.mjs",
     "verify:console": "node scripts/verify-console-usage.mjs",
     "verify:env:public": "node scripts/verify-public-env.mjs",
+    "validate:security": "node scripts/validate-security.mjs",
     "lint": "eslint . --ext .ts,.tsx && node scripts/check-edge-imports.mjs",
     "type-check": "tsc -p tsconfig.json --noEmit",
     "typecheck": "tsc -p tsconfig.json --noEmit",
