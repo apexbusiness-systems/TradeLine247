@@ -1,4 +1,3 @@
-
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // --- ENV VARS ---
@@ -11,11 +10,12 @@ if (!supabaseUrl || !supabaseServiceKey || !openaiKey) {
     Deno.exit(1);
 }
 
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
 // --- HELPER FUNCIONS ---
 async function generateEmbedding(text: string, key: string): Promise<number[]> {
-    // Use replaceAll with regex if supported, or stick to replace with global flag.
-    // Linter S7781 suggests replaceAll.
-    const normalized = text.replace(/\s+/g, ' ').trim();
+    // Use replaceAll with regex if supported (ES2021+), ensures global replacement explicitly.
+    const normalized = text.replaceAll(/\s+/g, ' ').trim();
     const response = await fetch('https://api.openai.com/v1/embeddings', {
         method: 'POST',
         headers: {
@@ -47,7 +47,81 @@ function chunkText(text: string, targetTokens = 800): string[] {
     return chunks;
 }
 
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
+// Extracted helper to reduce cognitive complexity of syncTranscriptions
+async function processTranscript(t: any, openaiKey: string) {
+    console.log(`   Processing: ${t.call_sid}`);
+
+    // 1. Ensure RAG 'calls' entry exists
+    const { data: existingCall, error: callFindErr } = await supabase
+        .from('calls')
+        .select('id')
+        .eq('twilio_call_sid', t.call_sid)
+        .maybeSingle();
+
+    if (callFindErr) {
+        console.error(`     ❌ Error checking calls table:`, callFindErr);
+        return;
+    }
+
+    let callId = existingCall?.id;
+
+    if (!callId) {
+        // Insert new RAG call entry
+        console.log(`     Creating RAG 'calls' entry...`);
+        const { data: newCall, error: createCallErr } = await supabase
+            .from('calls')
+            .insert({
+                org_id: t.tenant_id,
+                twilio_call_sid: t.call_sid,
+            })
+            .select('id')
+            .single();
+
+        if (createCallErr) {
+            console.error(`     ❌ Failed to create RAG call entry:`, createCallErr);
+            return;
+        }
+        callId = newCall.id;
+    }
+
+    // 2. Check for existing Chunks
+    const { count } = await supabase
+        .from('call_chunks')
+        .select('*', { count: 'exact', head: true })
+        .eq('call_id', callId);
+
+    if (count && count > 0) {
+        return;
+    }
+
+    // 3. Chunk & Embed
+    const chunks = chunkText(t.transcript_text);
+    let chunkIdx = 0;
+
+    for (const chunkContent of chunks) {
+        try {
+            const embedding = await generateEmbedding(chunkContent, openaiKey);
+
+            const { error: insertErr } = await supabase
+                .from('call_chunks')
+                .insert({
+                    org_id: t.tenant_id,
+                    call_id: callId,
+                    chunk_index: chunkIdx++,
+                    content: chunkContent,
+                    embedding: `[${embedding.join(',')}]`,
+                    metadata: { source: 'transcript', original_id: t.id }
+                });
+
+            if (insertErr) console.error(`     ❌ Chunk insert failed:`, insertErr);
+            else process.stdout.write('.');
+
+        } catch (e) {
+            console.error(`     ❌ Embedding failed:`, e);
+        }
+    }
+    console.log("");
+}
 
 async function syncTranscriptions(openaiKey: string) {
     // 1. Fetch Source Data (call_transcriptions)
@@ -68,78 +142,7 @@ async function syncTranscriptions(openaiKey: string) {
     }
 
     for (const t of transcriptions) {
-        console.log(`   Processing: ${t.call_sid}`);
-
-        // 2. Ensure RAG 'calls' entry exists
-        const { data: existingCall, error: callFindErr } = await supabase
-            .from('calls')
-            .select('id')
-            .eq('twilio_call_sid', t.call_sid)
-            .maybeSingle();
-
-        if (callFindErr) {
-            console.error(`     ❌ Error checking calls table:`, callFindErr);
-            continue;
-        }
-
-        let callId = existingCall?.id;
-
-        if (!callId) {
-            // Insert new RAG call entry
-            console.log(`     Creating RAG 'calls' entry...`);
-            const { data: newCall, error: createCallErr } = await supabase
-                .from('calls')
-                .insert({
-                    org_id: t.tenant_id,
-                    twilio_call_sid: t.call_sid,
-                })
-                .select('id')
-                .single();
-
-            if (createCallErr) {
-                console.error(`     ❌ Failed to create RAG call entry:`, createCallErr);
-                continue;
-            }
-            callId = newCall.id;
-        }
-
-        // 3. Check for existing Chunks
-        const { count } = await supabase
-            .from('call_chunks')
-            .select('*', { count: 'exact', head: true })
-            .eq('call_id', callId);
-
-        if (count && count > 0) {
-            continue;
-        }
-
-        // 4. Chunk & Embed
-        const chunks = chunkText(t.transcript_text);
-        let chunkIdx = 0;
-
-        for (const chunkContent of chunks) {
-            try {
-                const embedding = await generateEmbedding(chunkContent, openaiKey);
-
-                const { error: insertErr } = await supabase
-                    .from('call_chunks')
-                    .insert({
-                        org_id: t.tenant_id,
-                        call_id: callId,
-                        chunk_index: chunkIdx++,
-                        content: chunkContent,
-                        embedding: `[${embedding.join(',')}]`,
-                        metadata: { source: 'transcript', original_id: t.id }
-                    });
-
-                if (insertErr) console.error(`     ❌ Chunk insert failed:`, insertErr);
-                else process.stdout.write('.');
-
-            } catch (e) {
-                console.error(`     ❌ Embedding failed:`, e);
-            }
-        }
-        console.log("");
+        await processTranscript(t, openaiKey);
     }
 }
 
