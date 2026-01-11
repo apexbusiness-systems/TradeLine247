@@ -1,4 +1,3 @@
-
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // --- ENV VARS ---
@@ -10,6 +9,8 @@ if (!supabaseUrl || !supabaseServiceKey || !openaiKey) {
     console.error("❌ Error: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, and OPENAI_API_KEY are required.");
     Deno.exit(1);
 }
+
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 // --- HELPER FUNCIONS ---
 async function generateEmbedding(text: string, key: string): Promise<number[]> {
