@@ -1,3 +1,4 @@
+
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // --- ENV VARS ---
@@ -13,6 +14,15 @@ if (!supabaseUrl || !supabaseServiceKey || !openaiKey) {
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 // --- HELPER FUNCIONS ---
+
+function writeProgressDot(): void {
+    try {
+        Deno.stdout.writeSync(new TextEncoder().encode('.'));
+    } catch {
+        // no-op (e.g., redirected output)
+    }
+}
+
 async function generateEmbedding(text: string, key: string): Promise<number[]> {
     // Use replaceAll with regex if supported (ES2021+), ensures global replacement explicitly.
     const normalized = text.replaceAll(/\s+/g, ' ').trim();
@@ -47,11 +57,32 @@ function chunkText(text: string, targetTokens = 800): string[] {
     return chunks;
 }
 
-// Extracted helper to reduce cognitive complexity of syncTranscriptions
-async function processTranscript(t: any, openaiKey: string) {
-    console.log(`   Processing: ${t.call_sid}`);
+// --- ORCHESTRATION HELPERS ---
 
-    // 1. Ensure RAG 'calls' entry exists
+type TranscriptionRow = {
+    id: string;
+    call_sid: string;
+    tenant_id: string;
+    transcript_text: string;
+};
+
+type KbDocRow = { id: string; title: string; text: string };
+
+async function fetchTranscriptions(batchSize = 50): Promise<TranscriptionRow[]> {
+    const { data, error } = await supabase
+        .from('call_transcriptions')
+        .select('id, call_sid, tenant_id, transcript_text')
+        .not('transcript_text', 'is', null)
+        .limit(batchSize);
+
+    if (error) {
+        console.error("❌ Error fetching source transcriptions:", error);
+        return [];
+    }
+    return (data ?? []) as TranscriptionRow[];
+}
+
+async function getOrCreateCallId(t: TranscriptionRow): Promise<string | null> {
     const { data: existingCall, error: callFindErr } = await supabase
         .from('calls')
         .select('id')
@@ -59,42 +90,43 @@ async function processTranscript(t: any, openaiKey: string) {
         .maybeSingle();
 
     if (callFindErr) {
-        console.error(`     ❌ Error checking calls table:`, callFindErr);
-        return;
+        console.error("     ❌ Error checking calls table:", callFindErr);
+        return null;
     }
+    if (existingCall?.id) return existingCall.id;
 
-    let callId = existingCall?.id;
+    console.log("     Creating RAG 'calls' entry...");
+    const { data: newCall, error: createCallErr } = await supabase
+        .from('calls')
+        .insert({ org_id: t.tenant_id, twilio_call_sid: t.call_sid })
+        .select('id')
+        .single();
 
-    if (!callId) {
-        // Insert new RAG call entry
-        console.log(`     Creating RAG 'calls' entry...`);
-        const { data: newCall, error: createCallErr } = await supabase
-            .from('calls')
-            .insert({
-                org_id: t.tenant_id,
-                twilio_call_sid: t.call_sid,
-            })
-            .select('id')
-            .single();
-
-        if (createCallErr) {
-            console.error(`     ❌ Failed to create RAG call entry:`, createCallErr);
-            return;
-        }
-        callId = newCall.id;
+    if (createCallErr) {
+        console.error("     ❌ Failed to create RAG call entry:", createCallErr);
+        return null;
     }
+    return newCall.id;
+}
 
-    // 2. Check for existing Chunks
-    const { count } = await supabase
+async function callAlreadyChunked(callId: string): Promise<boolean> {
+    const { count, error } = await supabase
         .from('call_chunks')
         .select('*', { count: 'exact', head: true })
         .eq('call_id', callId);
 
-    if (count && count > 0) {
-        return;
+    if (error) {
+        console.error("     ❌ Error checking call_chunks:", error);
+        return true; // safe default prevents duping on transient errors
     }
+    return !!count && count > 0;
+}
 
-    // 3. Chunk & Embed
+async function insertChunksForTranscription(
+    t: TranscriptionRow,
+    callId: string,
+    openaiKey: string
+): Promise<void> {
     const chunks = chunkText(t.transcript_text);
     let chunkIdx = 0;
 
@@ -113,53 +145,55 @@ async function processTranscript(t: any, openaiKey: string) {
                     metadata: { source: 'transcript', original_id: t.id }
                 });
 
-            if (insertErr) console.error(`     ❌ Chunk insert failed:`, insertErr);
-            else process.stdout.write('.');
-
+            if (insertErr) console.error("     ❌ Chunk insert failed:", insertErr);
+            else writeProgressDot();
         } catch (e) {
-            console.error(`     ❌ Embedding failed:`, e);
+            console.error("     ❌ Embedding failed:", e);
         }
     }
     console.log("");
 }
 
-async function syncTranscriptions(openaiKey: string) {
-    // 1. Fetch Source Data (call_transcriptions)
-    const { data: transcriptions, error: tErr } = await supabase
-        .from('call_transcriptions')
-        .select('id, call_sid, tenant_id, transcript_text')
-        .not('transcript_text', 'is', null)
-        .limit(50); // Batch size
+async function syncTranscriptionsToCallChunks(openaiKey: string): Promise<void> {
+    console.log("Goal: Sync 'call_transcriptions' (Ops) -> 'call_chunks' (RAG)");
+    const transcriptions = await fetchTranscriptions(50);
 
-    if (tErr) {
-        console.error("❌ Error fetching source transcriptions:", tErr);
-        return;
-    }
-
-    if (!transcriptions || transcriptions.length === 0) {
+    if (transcriptions.length === 0) {
         console.log("   No source transcriptions found.");
         return;
     }
 
     for (const t of transcriptions) {
-        await processTranscript(t, openaiKey);
+        console.log(`   Processing: ${t.call_sid}`);
+        const callId = await getOrCreateCallId(t);
+        if (!callId) continue;
+
+        const already = await callAlreadyChunked(callId);
+        if (already) continue;
+
+        await insertChunksForTranscription(t, callId, openaiKey);
     }
 }
 
-async function syncKBDocs(openaiKey: string) {
-    console.log("\n📥 Checking KB Documents...");
-    const { data: docs, error: dErr } = await supabase
+async function fetchKbDocsMissingEmbeddings(batchSize = 50): Promise<KbDocRow[]> {
+    const { data, error } = await supabase
         .from('kb_documents')
         .select('id, title, text')
         .is('embedding', null)
-        .limit(50);
+        .limit(batchSize);
 
-    if (dErr) {
-        console.error("❌ Error fetching kb_documents:", dErr);
-        return;
+    if (error) {
+        console.error("❌ Error fetching kb_documents:", error);
+        return [];
     }
+    return (data ?? []) as KbDocRow[];
+}
 
-    if (!docs || docs.length === 0) {
+async function embedPendingKbDocuments(openaiKey: string): Promise<void> {
+    console.log("\n📥 Checking KB Documents...");
+    const docs = await fetchKbDocsMissingEmbeddings(50);
+
+    if (docs.length === 0) {
         console.log("   No KB documents pending embedding.");
         return;
     }
@@ -174,7 +208,7 @@ async function syncKBDocs(openaiKey: string) {
                 .update({ embedding: `[${embedding.join(',')}]` })
                 .eq('id', doc.id);
         } catch (e) {
-            console.error(`     ❌ Failed:`, e);
+            console.error("     ❌ Failed:", e);
         }
     }
 }
@@ -183,11 +217,8 @@ async function syncKBDocs(openaiKey: string) {
 async function runLocalIngestion() {
     console.log("🚀 Starting LOCAL RAG Ingestion (Sync Mode)...");
     console.log("------------------------------------------------");
-    console.log("Goal: Sync 'call_transcriptions' (Ops) -> 'call_chunks' (RAG)");
-
-    await syncTranscriptions(openaiKey!);
-    await syncKBDocs(openaiKey!);
-
+    await syncTranscriptionsToCallChunks(openaiKey!);
+    await embedPendingKbDocuments(openaiKey!);
     console.log("\n✅ Sync Complete.");
 }
 

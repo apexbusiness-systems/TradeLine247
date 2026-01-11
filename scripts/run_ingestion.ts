@@ -31,7 +31,7 @@ async function runIngestion() {
                 console.error("   Message:", error.message);
             }
             // Check if it's an HTTP error masked as a function error
-            if (typeof error === 'object' && 'context' in error) {
+            if (typeof error === 'object' && error !== null && 'context' in error) {
                 console.error("   Context:", JSON.stringify((error as any).context, null, 2));
             }
             return;
