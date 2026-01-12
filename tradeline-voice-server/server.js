@@ -7,6 +7,25 @@ const helmet = require('helmet');
 
 require('dotenv').config();
 
+// Global Error Handlers (Railway requirement for clear logs)
+process.on('uncaughtException', (err) => {
+    console.error('❌ UNCAUGHT EXCEPTION:', err);
+    process.exit(1);
+});
+
+process.on('unhandledRejection', (reason) => {
+    console.error('❌ UNHANDLED REJECTION:', reason);
+    process.exit(1);
+});
+
+console.log('✅ Server starting...');
+console.log('Environment:', {
+    PORT: process.env.PORT,
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY ? '✅ SET' : '❌ MISSING',
+    TWILIO_ACCOUNT_SID: process.env.TWILIO_ACCOUNT_SID ? '✅ SET' : '❌ MISSING', // Keep consistent with user request, though we use AUTH_TOKEN in code
+    TWILIO_AUTH_TOKEN: process.env.TWILIO_AUTH_TOKEN ? '✅ SET' : '❌ MISSING',
+});
+
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ noServer: true });
@@ -32,6 +51,11 @@ app.use(helmet());
 app.use(express.urlencoded({ extended: true })); // Twilio sends form-urlencoded
 
 // Health Check
+app.get('/health', (req, res) => {
+    res.status(200).json({ status: 'ok' });
+});
+
+// Alias for internal consistency or legacy checks, if any
 app.get('/healthz', (req, res) => {
     res.status(200).send('OK');
 });
@@ -79,7 +103,6 @@ server.on('upgrade', (request, socket, head) => {
     }
 
     // Validate Twilio Signature for WebSocket
-    // Twilio signs the full URL including query params
     const fullUrl = PUBLIC_BASE_URL + request.url;
     const signature = request.headers['x-twilio-signature'];
 
@@ -97,7 +120,6 @@ server.on('upgrade', (request, socket, head) => {
 
 /**
  * Handles the 'prompt' message from Twilio ConversationRelay
- * Extracts complex logic to reduce Cognitive Complexity
  */
 async function handlePrompt(msg, ws, state) {
     if (!msg.last) return; // Buffer partials if needed, or just ignore for now
@@ -202,7 +224,7 @@ function handleInterrupt(state) {
 }
 
 wss.on('connection', (ws) => {
-    // Session State object instead of loose variables
+    // Session State
     const state = {
         sessionLang: 'en',
         history: [
@@ -230,15 +252,12 @@ wss.on('connection', (ws) => {
             switch (msg.type) {
                 case 'setup':
                     break;
-
                 case 'prompt':
                     await handlePrompt(msg, ws, state);
                     break;
-
                 case 'interrupt':
                     handleInterrupt(state);
                     break;
-
                 default:
                     break;
             }
@@ -248,6 +267,6 @@ wss.on('connection', (ws) => {
     });
 });
 
-server.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Voice server running on port ${PORT}`);
 });
