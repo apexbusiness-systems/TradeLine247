@@ -85,23 +85,6 @@ async function callLLM({ prompt, history, lang, signal }) {
 wss.on('connection', (ws, req) => {
   const session = createSession();
 
-  // Validate Twilio signature on WS handshake
-  try {
-    const parsed = url.parse(req.url, true);
-    const requestUrl = `${PUBLIC_BASE_URL}${parsed.pathname}${parsed.search || ''}`;
-    const params = parsed.query || {};
-    const signature = req.headers['x-twilio-signature'];
-
-    if (!twilio.validateRequest(TWILIO_AUTH_TOKEN, signature, requestUrl, params)) {
-      console.error('[relay] Invalid Twilio signature on handshake');
-      ws.close(1008, 'Invalid Twilio signature');
-      return;
-    }
-  } catch (err) {
-    console.error('[relay] Signature validation error', { message: err.message });
-    ws.close(1008, 'Signature validation error');
-    return;
-  }
 
   console.log('[relay] connection established');
 
