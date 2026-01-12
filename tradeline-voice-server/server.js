@@ -1,5 +1,5 @@
 const express = require('express');
-const http = require('http');
+const http = require('node:http');
 const WebSocket = require('ws');
 const { validateRequest, validateExpressRequest } = require('twilio');
 const OpenAI = require('openai');
@@ -38,7 +38,6 @@ app.get('/healthz', (req, res) => {
 
 // Voice Answer Webhook
 app.post('/voice-answer', (req, res) => {
-    const twilioSignature = req.headers['x-twilio-signature'];
     const url = `${PUBLIC_BASE_URL}/voice-answer`;
 
     // Validate Twilio Signature
@@ -96,16 +95,124 @@ server.on('upgrade', (request, socket, head) => {
     });
 });
 
+/**
+ * Handles the 'prompt' message from Twilio ConversationRelay
+ * Extracts complex logic to reduce Cognitive Complexity
+ */
+async function handlePrompt(msg, ws, state) {
+    if (!msg.last) return; // Buffer partials if needed, or just ignore for now
+
+    if (msg.lang) {
+        // eslint-disable-next-line no-param-reassign
+        state.sessionLang = msg.lang;
+    }
+
+    // Abort previous if any
+    if (state.inFlightController) state.inFlightController.abort();
+    // eslint-disable-next-line no-param-reassign
+    state.inFlightController = new AbortController();
+
+    state.history.push({ role: 'user', content: msg.token || '' });
+
+    // Cap history
+    if (state.history.length > 20) {
+        // eslint-disable-next-line no-param-reassign
+        state.history = [state.history[0], ...state.history.slice(-19)];
+    }
+
+    // 1200ms Dead Air Guard
+    const deadAirTimer = setTimeout(() => {
+        if (ws.readyState === WebSocket.OPEN) {
+            const filler = state.sessionLang.startsWith('es') ? 'Un momento...' : 'One moment...';
+            ws.send(JSON.stringify({
+                type: 'text',
+                token: filler,
+                last: true,
+                interruptible: true,
+                preemptible: true,
+                lang: state.sessionLang,
+            }));
+        }
+    }, 1200);
+
+    try {
+        const stream = await openai.chat.completions.create({
+            model: 'gpt-4o', // Or user preferred model
+            messages: [
+                ...state.history,
+                { role: 'system', content: `Respond in language: ${state.sessionLang}` },
+            ],
+            stream: true,
+        }, { signal: state.inFlightController.signal });
+
+        let fullResponse = '';
+
+        for await (const chunk of stream) {
+            clearTimeout(deadAirTimer); // Clear timer on first byte
+            const content = chunk.choices[0]?.delta?.content || '';
+            if (content) {
+                fullResponse += content;
+                ws.send(JSON.stringify({
+                    type: 'text',
+                    token: content,
+                    last: false,
+                }));
+            }
+        }
+
+        // End of stream
+        ws.send(JSON.stringify({
+            type: 'text',
+            token: '',
+            last: true,
+            interruptible: true,
+            preemptible: true,
+            lang: state.sessionLang,
+        }));
+
+        state.history.push({ role: 'assistant', content: fullResponse });
+
+    } catch (err) {
+        clearTimeout(deadAirTimer);
+        if (err.name === 'AbortError') return;
+
+        console.error('OpenAI Error:', err);
+        const apology = state.sessionLang.startsWith('es') ? 'Lo siento, hubo un error.' : 'Sorry, I encountered an error.';
+        ws.send(JSON.stringify({
+            type: 'text',
+            token: apology,
+            last: true,
+            lang: state.sessionLang,
+        }));
+    } finally {
+        // eslint-disable-next-line no-param-reassign
+        state.inFlightController = null;
+    }
+}
+
+/**
+ * Handles the 'interrupt' message
+ */
+function handleInterrupt(state) {
+    if (state.inFlightController) {
+        state.inFlightController.abort();
+        // eslint-disable-next-line no-param-reassign
+        state.inFlightController = null;
+    }
+}
+
 wss.on('connection', (ws) => {
-    let sessionLang = 'en'; // Default
-    let history = [
-        { role: 'system', content: 'You are a helpful assistant for TradeLine 24/7. Keep answers concise (under 2 sentences). Do not use markdown.' }
-    ];
-    let inFlightController = null;
-    let heartbeatInterval = null;
+    // Session State object instead of loose variables
+    const state = {
+        sessionLang: 'en',
+        history: [
+            { role: 'system', content: 'You are a helpful assistant for TradeLine 24/7. Keep answers concise (under 2 sentences). Do not use markdown.' },
+        ],
+        inFlightController: null,
+    };
 
     // Heartbeat
-    heartbeatInterval = setInterval(() => {
+    const heartbeatInterval = setInterval(() => {
         if (ws.readyState === WebSocket.OPEN) {
             ws.ping();
         }
@@ -113,7 +220,7 @@ wss.on('connection', (ws) => {
 
     ws.on('close', () => {
         clearInterval(heartbeatInterval);
-        if (inFlightController) inFlightController.abort();
+        if (state.inFlightController) state.inFlightController.abort();
     });
 
     ws.on('message', async (data) => {
@@ -122,101 +229,14 @@ wss.on('connection', (ws) => {
 
             switch (msg.type) {
                 case 'setup':
-                    // Store session info if needed
                     break;
 
                 case 'prompt':
-                    if (!msg.last) return; // Buffer partials if needed, or just ignore for now (assuming 'last' is key)
-
-                    if (msg.lang) {
-                        sessionLang = msg.lang;
-                        // Update system prompt or just rely on the AI to adapt, but user asked to force same language
-                        // We can append a fleeting system instruction for the language
-                    }
-
-                    // Abort previous if any (though 'interrupt' usually handles this)
-                    if (inFlightController) inFlightController.abort();
-                    inFlightController = new AbortController();
-
-                    history.push({ role: 'user', content: msg.token || '' });
-
-                    // Cap history
-                    if (history.length > 20) history = [history[0], ...history.slice(-19)];
-
-                    // 1200ms Dead Air Guard
-                    let deadAirTimer = setTimeout(() => {
-                        if (ws.readyState === WebSocket.OPEN) {
-                            const filler = sessionLang.startsWith('es') ? 'Un momento...' : 'One moment...';
-                            ws.send(JSON.stringify({
-                                type: 'text',
-                                token: filler,
-                                last: true, // It's a complete filler utterance
-                                interruptible: true,
-                                preemptible: true,
-                                lang: sessionLang
-                            }));
-                        }
-                    }, 1200);
-
-                    try {
-                        const stream = await openai.chat.completions.create({
-                            model: 'gpt-4o', // Or user preferred model
-                            messages: [
-                                ...history,
-                                { role: 'system', content: `Respond in language: ${sessionLang}` }
-                            ],
-                            stream: true,
-                        }, { signal: inFlightController.signal });
-
-                        let fullResponse = '';
-
-                        for await (const chunk of stream) {
-                            clearTimeout(deadAirTimer); // Clear timer on first byte
-                            const content = chunk.choices[0]?.delta?.content || '';
-                            if (content) {
-                                fullResponse += content;
-                                ws.send(JSON.stringify({
-                                    type: 'text',
-                                    token: content,
-                                    last: false
-                                }));
-                            }
-                        }
-
-                        // End of stream
-                        ws.send(JSON.stringify({
-                            type: 'text',
-                            token: '',
-                            last: true,
-                            interruptible: true,
-                            preemptible: true,
-                            lang: sessionLang
-                        }));
-
-                        history.push({ role: 'assistant', content: fullResponse });
-
-                    } catch (err) {
-                        clearTimeout(deadAirTimer);
-                        if (err.name === 'AbortError') return;
-
-                        console.error('OpenAI Error:', err);
-                        const apology = sessionLang.startsWith('es') ? 'Lo siento, hubo un error.' : 'Sorry, I encountered an error.';
-                        ws.send(JSON.stringify({
-                            type: 'text',
-                            token: apology,
-                            last: true,
-                            lang: sessionLang
-                        }));
-                    } finally {
-                        inFlightController = null;
-                    }
+                    await handlePrompt(msg, ws, state);
                     break;
 
                 case 'interrupt':
-                    if (inFlightController) {
-                        inFlightController.abort();
-                        inFlightController = null;
-                    }
+                    handleInterrupt(state);
                     break;
 
                 default:
