@@ -17,7 +17,7 @@ const REQUIRED_EDGE_FUNCTIONS = [
   'generate-ai-profile',
   'resolve-escalation',
   'sync-calendar-event',
-  'health-check',
+  'healthz',
 ];
 
 const REQUIRED_SHARED_MODULES = [
@@ -98,7 +98,7 @@ check('CORS handling', checkFileContains('supabase/functions/create-booking/inde
 
 console.log('\n📊 Monitoring Features:');
 check('Circuit breaker', checkFileContains('supabase/functions/_shared/enterprise-monitoring.ts', 'CircuitBreaker'));
-check('Health checks', checkFileContains('supabase/functions/health-check/index.ts', 'checkDatabase'));
+check('Health checks', checkFileContains('supabase/functions/healthz/index.ts', 'healthCheckQuery'));
 check('Audit logging', checkFileContains('supabase/functions/_shared/enterprise-monitoring.ts', 'logSecurityEvent'));
 
 console.log('\n💳 Payment Features:');

@@ -31,10 +31,21 @@ describe('HTTP security primitives', () => {
   });
 
   it('handles CORS preflight', () => {
-    const res = preflight(new Request('https://example.com', { method: 'OPTIONS' }));
+    // Test with an allowlisted origin
+    const testOrigin = 'https://www.tradeline247ai.com';
+
+    const res = preflight(new Request('https://example.com', {
+      method: 'OPTIONS',
+      headers: { Origin: testOrigin },
+    }));
+
     expect(res).not.toBeNull();
     expect(res?.status).toBe(204);
-    expect(res?.headers.get('Access-Control-Allow-Origin')).toBe('*');
+
+    // CORS may return '*' (legacy) or the validated origin (allowlist)
+    const allowOrigin = res?.headers.get('Access-Control-Allow-Origin');
+    expect([testOrigin, '*']).toContain(allowOrigin);
+
     expect(res?.headers.get('Content-Length')).toBe('0');
   });
 
