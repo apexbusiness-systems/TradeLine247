@@ -11,6 +11,7 @@ on:
 jobs:
   migrate:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
@@ -22,6 +23,13 @@ jobs:
       - uses: supabase/setup-cli@v1
         with:
           version: latest
+
+      # CRITICAL FIX: Create temp directory BEFORE running CLI
+      - name: Prepare Supabase Environment
+        run: |
+          mkdir -p supabase/.temp
+          touch supabase/.temp/profile
+          echo "✅ Environment prepared"
 
       - name: 🔍 Network Sanity Check
         shell: bash
