@@ -125,20 +125,20 @@ async function handlePrompt(msg, ws, state) {
     if (!msg.last) return; // Buffer partials if needed, or just ignore for now
 
     if (msg.lang) {
-        // eslint-disable-next-line no-param-reassign
+         
         state.sessionLang = msg.lang;
     }
 
     // Abort previous if any
     if (state.inFlightController) state.inFlightController.abort();
-    // eslint-disable-next-line no-param-reassign
+     
     state.inFlightController = new AbortController();
 
     state.history.push({ role: 'user', content: msg.token || '' });
 
     // Cap history
     if (state.history.length > 20) {
-        // eslint-disable-next-line no-param-reassign
+         
         state.history = [state.history[0], ...state.history.slice(-19)];
     }
 
@@ -207,7 +207,7 @@ async function handlePrompt(msg, ws, state) {
             lang: state.sessionLang,
         }));
     } finally {
-        // eslint-disable-next-line no-param-reassign
+         
         state.inFlightController = null;
     }
 }
@@ -218,7 +218,7 @@ async function handlePrompt(msg, ws, state) {
 function handleInterrupt(state) {
     if (state.inFlightController) {
         state.inFlightController.abort();
-        // eslint-disable-next-line no-param-reassign
+         
         state.inFlightController = null;
     }
 }
