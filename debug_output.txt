@@ -1,0 +1,6 @@
+✅ Success accessing call_logs. Rows found: 0
+✅ Success accessing call_transcriptions. Rows found: 0
+❌ Error accessing calls: column calls.id does not exist (42703)
+❌ Error accessing call_chunks: Could not find the table 'public.call_chunks' in the schema cache (PGRST205)
+❌ Error accessing kb_documents: Could not find the table 'public.kb_documents' in the schema cache (PGRST205)
+❌ Error accessing non_existent_table_xyz: Could not find the table 'public.non_existent_table_xyz' in the schema cache (PGRST205)

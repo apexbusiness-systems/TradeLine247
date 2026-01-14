@@ -39,11 +39,16 @@ const {
 } = process.env;
 
 if (!OPENAI_API_KEY || !TWILIO_AUTH_TOKEN || !PUBLIC_BASE_URL) {
-    console.error('Missing required environment variables');
-    process.exit(1);
+    console.warn("⚠️ [BUILD WARNING] Missing env var, skipping exit for build phase.");
+    // process.exit(1);
 }
 
-const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
+let openai;
+if (OPENAI_API_KEY) {
+    openai = new OpenAI({ apiKey: OPENAI_API_KEY });
+} else {
+    console.warn("⚠️ [STARTUP] OpenAI API Key missing. AI features will be disabled.");
+}
 
 // Security & Parsing
 app.set('trust proxy', true);
@@ -125,20 +130,20 @@ async function handlePrompt(msg, ws, state) {
     if (!msg.last) return; // Buffer partials if needed, or just ignore for now
 
     if (msg.lang) {
-         
+
         state.sessionLang = msg.lang;
     }
 
     // Abort previous if any
     if (state.inFlightController) state.inFlightController.abort();
-     
+
     state.inFlightController = new AbortController();
 
     state.history.push({ role: 'user', content: msg.token || '' });
 
     // Cap history
     if (state.history.length > 20) {
-         
+
         state.history = [state.history[0], ...state.history.slice(-19)];
     }
 
@@ -158,6 +163,10 @@ async function handlePrompt(msg, ws, state) {
     }, 1200);
 
     try {
+        if (!openai) {
+            throw new Error("OpenAI client not initialized (missing API Key)");
+        }
+
         const stream = await openai.chat.completions.create({
             model: 'gpt-4o', // Or user preferred model
             messages: [
@@ -207,7 +216,7 @@ async function handlePrompt(msg, ws, state) {
             lang: state.sessionLang,
         }));
     } finally {
-         
+
         state.inFlightController = null;
     }
 }
@@ -218,7 +227,7 @@ async function handlePrompt(msg, ws, state) {
 function handleInterrupt(state) {
     if (state.inFlightController) {
         state.inFlightController.abort();
-         
+
         state.inFlightController = null;
     }
 }
