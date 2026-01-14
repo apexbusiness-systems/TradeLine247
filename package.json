@@ -148,7 +148,7 @@
     "helmet": "7.1.0",
     "openai": "4.33.0",
     "twilio": "5.0.1",
-    "ws": "8.16.0"
+    "ws": "^8.17.1"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.0",
