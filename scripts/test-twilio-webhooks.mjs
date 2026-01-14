@@ -189,7 +189,7 @@ async function testQAView() {
 
 // Main execution
 async function main() {
-  const [,, webhookType, callSid] = process.argv;
+  const [, , webhookType, callSid] = process.argv;
 
   console.log('🚀 Twilio Webhook Testing Script');
   console.log('================================');
