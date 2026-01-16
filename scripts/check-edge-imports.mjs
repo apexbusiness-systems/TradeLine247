@@ -5,7 +5,7 @@ import process from 'node:process';
 const rootDir = process.cwd();
 const functionsDir = path.join(rootDir, 'supabase', 'functions');
 const npmImportRegex = /['"]npm:([^'\"]+)['"]/g;
-const allowedPackages = [/^date-fns@/, /^date-fns-tz@/];
+const allowedPackages = [/^date-fns@/, /^date-fns-tz@/, /^twilio/];
 const violations = [];
 
 async function walk(dir) {
