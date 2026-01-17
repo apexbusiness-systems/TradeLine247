@@ -26,11 +26,10 @@ const TEST_BUSINESS_NUMBER = '+15877428885';
 // ============================================================================
 
 /**
- * Generate a unique test CallSid
- * Note: Math.random() is safe for test ID generation (not cryptographic use)
+ * Generate a unique test CallSid using crypto-safe randomness
  */
 function generateCallSid(): string {
-  return `CA_test_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+  return `CA_test_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`;
 }
 
 /**
