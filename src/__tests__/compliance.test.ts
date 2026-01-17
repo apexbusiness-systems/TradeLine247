@@ -24,10 +24,10 @@ function redactSensitive(text: string): string {
   return text
     .replaceAll(/\b\d{3}-\d{2}-\d{4}\b/g, 'XXX-XX-XXXX') // SSN
     .replaceAll(/\b\d{13,19}\b/g, (m) => m.slice(0, 4).padEnd(m.length, 'X')) // Credit cards
-    .replaceAll(/\b(?:AKIA|SK-|sk-|api_key=|apikey=)[A-Za-z0-9_-]{8,}\b/gi, '[REDACTED_KEY]') // API keys (fixed duplicate hyphen)
+    .replaceAll(/\b(?:AKIA|SK-|sk-|api_key=|apikey=)[\w-]{8,}\b/gi, '[REDACTED_KEY]') // API keys
     .replaceAll(/\+\d{10,15}/g, '[PHONE]') // Phone numbers
-    .replaceAll(/[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/g, '[EMAIL]') // Emails (atomic pattern)
-    .replaceAll(/\b\d{4,6}\b/g, (m) => (m.length >= 4 && m.length <= 6 ? '****' : m)); // PINs
+    .replaceAll(/[\w.%+-]+@[\w-]+(?:\.[\w-]+)*\.[A-Za-z]{2,}/g, '[EMAIL]') // Emails
+    .replaceAll(/\b\d{4,6}\b/g, '****'); // PINs (4-6 digits always redacted)
 }
 
 /**
@@ -39,8 +39,8 @@ function enforceQuietHours(
   quietWindow?: { start: number; end: number }
 ): { adjusted_time: string; needs_review: boolean; original_time?: string } {
   const window = quietWindow ?? { start: 8, end: 21 };
-  const d = typeof proposedTimeIso === 'string'
-    ? new Date(proposedTimeIso)
+  const d = proposedTimeIso instanceof Date
+    ? proposedTimeIso
     : new Date(proposedTimeIso);
 
   const originalTime = d.toISOString();
