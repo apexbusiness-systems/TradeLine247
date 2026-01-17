@@ -7,7 +7,7 @@
  * @version 1.0.0
  */
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 
 // ============================================================================
 // MOCK RAG UTILITIES
@@ -21,17 +21,19 @@ interface ChunkResult {
 
 /**
  * Simple sentence-aware chunking (~800 tokens target, ~120 overlap)
+ * Uses atomic regex pattern to prevent ReDoS
  */
 function chunkText(text: string, targetTokens = 800, overlapTokens = 120): ChunkResult[] {
-  const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+  // Atomic pattern: match non-terminators followed by terminator(s)
+  const sentences = text.match(/[^.!?]+[.!?]+/g) ?? [text];
   const chunks: ChunkResult[] = [];
   let currentChunk = '';
   let currentTokens = 0;
   let chunkIndex = 0;
   const avgCharsPerToken = 4;
 
-  for (let i = 0; i < sentences.length; i++) {
-    const sentence = sentences[i].trim();
+  for (const rawSentence of sentences) {
+    const sentence = rawSentence.trim();
     const sentenceTokens = Math.ceil(sentence.length / avgCharsPerToken);
 
     if (currentTokens + sentenceTokens > targetTokens && currentChunk) {
@@ -79,13 +81,13 @@ function detectLanguage(text: string): string {
  * Normalize text for embedding
  */
 function normalizeTextForEmbedding(text: string, explicitLang?: string): { normalized: string; language: string } {
-  const language = explicitLang || detectLanguage(text);
+  const language = explicitLang ?? detectLanguage(text);
 
   // Basic normalization: lowercase, trim, collapse whitespace
-  let normalized = text.toLowerCase().trim().replace(/\s+/g, ' ');
+  let normalized = text.toLowerCase().trim().replaceAll(/\s+/g, ' ');
 
   // Remove special characters but keep language-specific ones
-  normalized = normalized.replace(/[^\w\s\u00C0-\u024F\u1E00-\u1EFF]/g, ' ').trim();
+  normalized = normalized.replaceAll(/[^\w\s\u00C0-\u024F\u1E00-\u1EFF]/g, ' ').trim();
 
   return { normalized, language };
 }
@@ -157,7 +159,7 @@ describe('RAG Chunking', () => {
   describe('Chunking with Overlap', () => {
     it('should create overlapping chunks for continuity', () => {
       // Create long text that will span multiple chunks
-      const longText = Array(200).fill('This is a test sentence for chunking. ').join('');
+      const longText = new Array(200).fill('This is a test sentence for chunking. ').join('');
       const chunks = chunkText(longText);
 
       // With overlap, we should have multiple chunks
@@ -168,7 +170,7 @@ describe('RAG Chunking', () => {
     });
 
     it('should respect target token limit', () => {
-      const longText = Array(500).fill('Word. ').join('');
+      const longText = new Array(500).fill('Word. ').join('');
       const chunks = chunkText(longText, 100); // Lower target for testing
 
       // Each chunk should be roughly within the target
@@ -320,8 +322,9 @@ describe('Cosine Similarity', () => {
 
   describe('Realistic Embeddings', () => {
     it('should handle high-dimensional vectors', () => {
-      const v1 = Array(1536).fill(0).map(() => Math.random());
-      const v2 = Array(1536).fill(0).map(() => Math.random());
+      // Math.random() is safe for test data generation (not cryptographic use)
+      const v1 = new Array(1536).fill(0).map(() => Math.random());
+      const v2 = new Array(1536).fill(0).map(() => Math.random());
 
       const similarity = cosineSimilarity(v1, v2);
       expect(similarity).toBeGreaterThanOrEqual(-1);
@@ -329,9 +332,10 @@ describe('Cosine Similarity', () => {
     });
 
     it('should find similar vectors have higher scores', () => {
-      const base = Array(10).fill(0).map(() => Math.random());
+      // Math.random() is safe for test data generation (not cryptographic use)
+      const base = new Array(10).fill(0).map(() => Math.random());
       const similar = base.map(v => v + (Math.random() * 0.1 - 0.05));
-      const different = Array(10).fill(0).map(() => Math.random());
+      const different = new Array(10).fill(0).map(() => Math.random());
 
       const similarScore = cosineSimilarity(base, similar);
       const differentScore = cosineSimilarity(base, different);
@@ -374,8 +378,8 @@ describe('Hybrid Search Scoring', () => {
     });
 
     it('should weight semantic higher by default', () => {
-      const semantic = 1.0;
-      const fullText = 0.0;
+      const semantic = 1;
+      const fullText = 0;
 
       const hybrid = calculateHybridScore(semantic, fullText);
       expect(hybrid).toBe(0.7); // Only semantic contributes
@@ -384,6 +388,7 @@ describe('Hybrid Search Scoring', () => {
 
   describe('Score Ranges', () => {
     it('should produce scores between 0 and 1', () => {
+      // Math.random() is safe for test data generation (not cryptographic use)
       for (let i = 0; i < 100; i++) {
         const semantic = Math.random();
         const fullText = Math.random();
@@ -405,7 +410,7 @@ describe('RAG Retrieval Quality', () => {
   describe('Query Processing', () => {
     it('should extract key terms from queries', () => {
       const query = 'What is your pricing for the premium plan?';
-      const keywords = query.toLowerCase().match(/\b\w{3,}\b/g) || [];
+      const keywords = query.toLowerCase().match(/\b\w{3,}\b/g) ?? [];
 
       expect(keywords).toContain('pricing');
       expect(keywords).toContain('premium');
