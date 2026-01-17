@@ -15,19 +15,27 @@ import { describe, it, expect } from 'vitest';
 // ============================================================================
 
 /**
+ * Simple email detection without regex backtracking risk
+ */
+function redactEmails(text: string): string {
+  return text.split(' ').map(w => (w.includes('@') && w.includes('.')) ? '[EMAIL]' : w).join(' ');
+}
+
+/**
  * Redact sensitive information from text for safe logging
- * Uses atomic patterns to prevent ReDoS vulnerabilities
  */
 function redactSensitive(text: string): string {
   if (!text) return text;
 
-  return text
+  const result = text
     .replaceAll(/\b\d{3}-\d{2}-\d{4}\b/g, 'XXX-XX-XXXX') // SSN
     .replaceAll(/\b\d{13,19}\b/g, (m) => m.slice(0, 4).padEnd(m.length, 'X')) // Credit cards
-    .replaceAll(/\b(?:AKIA|SK-|sk-|api_key=|apikey=)[\w-]{8,}\b/gi, '[REDACTED_KEY]') // API keys
+    .replaceAll(/\bAKIA[\w]{12,}\b/g, '[REDACTED_KEY]') // AWS keys
+    .replaceAll(/\bsk-[\w]{20,}\b/gi, '[REDACTED_KEY]') // OpenAI keys
     .replaceAll(/\+\d{10,15}/g, '[PHONE]') // Phone numbers
-    .replaceAll(/[\w.%+-]+@[\w-]+(?:\.[\w-]+)*\.[A-Za-z]{2,}/g, '[EMAIL]') // Emails
-    .replaceAll(/\b\d{4,6}\b/g, '****'); // PINs (4-6 digits always redacted)
+    .replaceAll(/\b\d{4,6}\b/g, '****'); // PINs
+
+  return redactEmails(result);
 }
 
 /**

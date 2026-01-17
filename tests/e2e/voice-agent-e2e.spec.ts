@@ -280,8 +280,8 @@ test.describe('Voice Safety - PII Sanitization', () => {
 
   test('should redact email addresses in logs', async () => {
     const textWithEmail = 'My email is test@example.com';
-    // Atomic pattern to prevent ReDoS
-    const sanitized = textWithEmail.replaceAll(/[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/g, '[EMAIL]');
+    // Simple word-based detection to avoid regex backtracking
+    const sanitized = textWithEmail.split(' ').map(w => (w.includes('@') && w.includes('.')) ? '[EMAIL]' : w).join(' ');
 
     expect(sanitized).toBe('My email is [EMAIL]');
     expect(sanitized).not.toContain('test@example.com');
