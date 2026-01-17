@@ -14,8 +14,8 @@ import { test, expect } from '@playwright/test';
 // TEST CONFIGURATION
 // ============================================================================
 
-const SUPABASE_URL = process.env.SUPABASE_URL || 'http://localhost:54321';
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || '';
+const SUPABASE_URL = process.env.SUPABASE_URL ?? 'http://localhost:54321';
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY ?? '';
 
 // Test phone numbers (E.164 format)
 const TEST_CALLER = '+15551234567';
@@ -27,6 +27,7 @@ const TEST_BUSINESS_NUMBER = '+15877428885';
 
 /**
  * Generate a unique test CallSid
+ * Note: Math.random() is safe for test ID generation (not cryptographic use)
  */
 function generateCallSid(): string {
   return `CA_test_${Date.now()}_${Math.random().toString(36).substring(7)}`;
@@ -272,7 +273,7 @@ test.describe('Voice Safety - PII Sanitization', () => {
 
   test('should redact phone numbers in logs', async () => {
     const textWithPhone = 'Call me at +15551234567 please';
-    const sanitized = textWithPhone.replace(/\+\d{10,15}/g, '[PHONE]');
+    const sanitized = textWithPhone.replaceAll(/\+\d{10,15}/g, '[PHONE]');
 
     expect(sanitized).toBe('Call me at [PHONE] please');
     expect(sanitized).not.toContain('+15551234567');
@@ -280,7 +281,8 @@ test.describe('Voice Safety - PII Sanitization', () => {
 
   test('should redact email addresses in logs', async () => {
     const textWithEmail = 'My email is test@example.com';
-    const sanitized = textWithEmail.replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, '[EMAIL]');
+    // Atomic pattern to prevent ReDoS
+    const sanitized = textWithEmail.replaceAll(/[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/g, '[EMAIL]');
 
     expect(sanitized).toBe('My email is [EMAIL]');
     expect(sanitized).not.toContain('test@example.com');
@@ -288,7 +290,7 @@ test.describe('Voice Safety - PII Sanitization', () => {
 
   test('should redact credit card numbers in logs', async () => {
     const textWithCard = 'My card is 4111111111111111';
-    const sanitized = textWithCard.replace(/\b\d{13,19}\b/g, (m) => m.slice(0, 4).padEnd(m.length, 'X'));
+    const sanitized = textWithCard.replaceAll(/\b\d{13,19}\b/g, (m) => m.slice(0, 4).padEnd(m.length, 'X'));
 
     expect(sanitized).toBe('My card is 4111XXXXXXXXXXXX');
     expect(sanitized).not.toContain('4111111111111111');
@@ -296,7 +298,7 @@ test.describe('Voice Safety - PII Sanitization', () => {
 
   test('should redact SSN in logs', async () => {
     const textWithSSN = 'SSN is 123-45-6789';
-    const sanitized = textWithSSN.replace(/\b\d{3}-\d{2}-\d{4}\b/g, 'XXX-XX-XXXX');
+    const sanitized = textWithSSN.replaceAll(/\b\d{3}-\d{2}-\d{4}\b/g, 'XXX-XX-XXXX');
 
     expect(sanitized).toBe('SSN is XXX-XX-XXXX');
     expect(sanitized).not.toContain('123-45-6789');
@@ -363,7 +365,8 @@ test.describe('Telephony - Webhook Security', () => {
 
   test('should reject requests without Twilio signature', async ({ request }) => {
     const callSid = generateCallSid();
-    const payload = createTwilioPayload({
+    // Validate payload creation works (used for integration testing)
+    createTwilioPayload({
       CallSid: callSid,
       From: TEST_CALLER,
       To: TEST_BUSINESS_NUMBER
@@ -479,7 +482,7 @@ test.describe('Conversation Flow - Support Inquiry (Adeline → Christy)', () =>
     expect(supportTurn?.text).toContain('problem');
 
     // Validate urgency detection
-    const hasUrgencyWords = /can't|cannot|urgent|immediately|right now/i.test(supportTurn?.text || '');
+    const hasUrgencyWords = /can't|cannot|urgent|immediately|right now/i.test(supportTurn?.text ?? '');
     expect(hasUrgencyWords).toBe(true);
   });
 });

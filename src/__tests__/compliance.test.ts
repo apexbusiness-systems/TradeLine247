@@ -8,7 +8,7 @@
  * @version 1.0.0
  */
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 
 // ============================================================================
 // MOCK COMPLIANCE UTILITIES (since we can't import Deno modules in Node tests)
@@ -16,17 +16,18 @@ import { describe, it, expect, vi } from 'vitest';
 
 /**
  * Redact sensitive information from text for safe logging
+ * Uses atomic patterns to prevent ReDoS vulnerabilities
  */
 function redactSensitive(text: string): string {
   if (!text) return text;
 
   return text
-    .replace(/\b\d{3}-\d{2}-\d{4}\b/g, 'XXX-XX-XXXX') // SSN
-    .replace(/\b\d{13,19}\b/g, (m) => m.slice(0, 4).padEnd(m.length, 'X')) // Credit cards
-    .replace(/\b(?:AKIA|SK-|sk-|api_key=|apikey=)[A-Za-z0-9-_]{8,}\b/gi, '[REDACTED_KEY]') // API keys
-    .replace(/\+\d{10,15}/g, '[PHONE]') // Phone numbers
-    .replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, '[EMAIL]') // Emails
-    .replace(/\b\d{4,6}\b/g, (m) => (m.length >= 4 && m.length <= 6 ? '****' : m)); // PINs
+    .replaceAll(/\b\d{3}-\d{2}-\d{4}\b/g, 'XXX-XX-XXXX') // SSN
+    .replaceAll(/\b\d{13,19}\b/g, (m) => m.slice(0, 4).padEnd(m.length, 'X')) // Credit cards
+    .replaceAll(/\b(?:AKIA|SK-|sk-|api_key=|apikey=)[A-Za-z0-9_-]{8,}\b/gi, '[REDACTED_KEY]') // API keys (fixed duplicate hyphen)
+    .replaceAll(/\+\d{10,15}/g, '[PHONE]') // Phone numbers
+    .replaceAll(/[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/g, '[EMAIL]') // Emails (atomic pattern)
+    .replaceAll(/\b\d{4,6}\b/g, (m) => (m.length >= 4 && m.length <= 6 ? '****' : m)); // PINs
 }
 
 /**
@@ -35,11 +36,12 @@ function redactSensitive(text: string): string {
 function enforceQuietHours(
   proposedTimeIso: string | Date,
   callerTz?: string | null,
-  window = { start: 8, end: 21 }
+  quietWindow?: { start: number; end: number }
 ): { adjusted_time: string; needs_review: boolean; original_time?: string } {
+  const window = quietWindow ?? { start: 8, end: 21 };
   const d = typeof proposedTimeIso === 'string'
     ? new Date(proposedTimeIso)
-    : new Date(proposedTimeIso.getTime());
+    : new Date(proposedTimeIso);
 
   const originalTime = d.toISOString();
 
@@ -100,6 +102,7 @@ function categorizeCall(
 
 /**
  * Calculate simple sentiment score from -1 to +1
+ * Uses Sets for O(1) lookups (performance optimization)
  */
 function calculateSentiment(text: string): number {
   if (!text) return 0;
@@ -107,17 +110,17 @@ function calculateSentiment(text: string): number {
   const lowerText = text.toLowerCase();
   const words = lowerText.split(/\s+/);
 
-  const positive = ['great', 'excellent', 'thank', 'appreciate', 'happy', 'good',
-    'perfect', 'wonderful', 'love', 'helpful', 'awesome', 'amazing', 'pleased'];
-  const negative = ['terrible', 'awful', 'horrible', 'frustrated', 'angry',
+  const positiveWords = new Set(['great', 'excellent', 'thank', 'appreciate', 'happy', 'good',
+    'perfect', 'wonderful', 'love', 'helpful', 'awesome', 'amazing', 'pleased']);
+  const negativeWords = new Set(['terrible', 'awful', 'horrible', 'frustrated', 'angry',
     'upset', 'disappointed', 'hate', 'bad', 'worst', 'sucks', 'furious',
-    'unacceptable', 'ridiculous', 'lawsuit', 'attorney', 'lawyer'];
+    'unacceptable', 'ridiculous', 'lawsuit', 'attorney', 'lawyer']);
 
   let score = 0;
-  words.forEach(word => {
-    if (positive.includes(word)) score += 0.15;
-    if (negative.includes(word)) score -= 0.25;
-  });
+  for (const word of words) {
+    if (positiveWords.has(word)) score += 0.15;
+    if (negativeWords.has(word)) score -= 0.25;
+  }
 
   return Math.max(-1, Math.min(1, score));
 }
@@ -308,7 +311,7 @@ describe('Quiet Hours Enforcement', () => {
     });
 
     it('should flag for review when timezone is undefined', () => {
-      const result = enforceQuietHours(new Date(), undefined);
+      const result = enforceQuietHours(new Date());
       expect(result.needs_review).toBe(true);
     });
 
