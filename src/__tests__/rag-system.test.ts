@@ -20,12 +20,30 @@ interface ChunkResult {
 }
 
 /**
+ * Split text into sentences without regex backtracking risk
+ */
+function splitSentences(text: string): string[] {
+  if (!text) return [text];
+  const result: string[] = [];
+  let current = '';
+  for (const char of text) {
+    current += char;
+    if (char === '.' || char === '!' || char === '?') {
+      if (current.trim()) result.push(current);
+      current = '';
+    }
+  }
+  if (current.trim()) result.push(current);
+  return result.length > 0 ? result : [text];
+}
+
+/**
  * Simple sentence-aware chunking (~800 tokens target, ~120 overlap)
- * Uses atomic regex pattern to prevent ReDoS
+ * Uses simple split to avoid regex backtracking
  */
 function chunkText(text: string, targetTokens = 800, overlapTokens = 120): ChunkResult[] {
-  // Atomic pattern: match non-terminators followed by terminator(s)
-  const sentences = text.match(/[^.!?]+[.!?]+/g) ?? [text];
+  // Split by sentence terminators using simple approach (no backtracking risk)
+  const sentences = splitSentences(text);
   const chunks: ChunkResult[] = [];
   let currentChunk = '';
   let currentTokens = 0;
@@ -322,9 +340,9 @@ describe('Cosine Similarity', () => {
 
   describe('Realistic Embeddings', () => {
     it('should handle high-dimensional vectors', () => {
-      // Math.random() is safe for test data generation (not cryptographic use)
-      const v1 = new Array(1536).fill(0).map(() => Math.random());
-      const v2 = new Array(1536).fill(0).map(() => Math.random());
+      // Use deterministic pseudo-random values based on index (safe, reproducible)
+      const v1 = new Array(1536).fill(0).map((_, i) => Math.sin(i) * 0.5 + 0.5);
+      const v2 = new Array(1536).fill(0).map((_, i) => Math.cos(i) * 0.5 + 0.5);
 
       const similarity = cosineSimilarity(v1, v2);
       expect(similarity).toBeGreaterThanOrEqual(-1);
@@ -332,10 +350,10 @@ describe('Cosine Similarity', () => {
     });
 
     it('should find similar vectors have higher scores', () => {
-      // Math.random() is safe for test data generation (not cryptographic use)
-      const base = new Array(10).fill(0).map(() => Math.random());
-      const similar = base.map(v => v + (Math.random() * 0.1 - 0.05));
-      const different = new Array(10).fill(0).map(() => Math.random());
+      // Use deterministic test vectors
+      const base = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0];
+      const similar = base.map(v => v + 0.01); // Slightly perturbed
+      const different = [0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.0]; // Reversed
 
       const similarScore = cosineSimilarity(base, similar);
       const differentScore = cosineSimilarity(base, different);
@@ -388,14 +406,14 @@ describe('Hybrid Search Scoring', () => {
 
   describe('Score Ranges', () => {
     it('should produce scores between 0 and 1', () => {
-      // Math.random() is safe for test data generation (not cryptographic use)
-      for (let i = 0; i < 100; i++) {
-        const semantic = Math.random();
-        const fullText = Math.random();
-        const hybrid = calculateHybridScore(semantic, fullText);
-
-        expect(hybrid).toBeGreaterThanOrEqual(0);
-        expect(hybrid).toBeLessThanOrEqual(1);
+      // Use deterministic test values across full range
+      const testValues = [0, 0.1, 0.25, 0.5, 0.75, 0.9, 1];
+      for (const semantic of testValues) {
+        for (const fullText of testValues) {
+          const hybrid = calculateHybridScore(semantic, fullText);
+          expect(hybrid).toBeGreaterThanOrEqual(0);
+          expect(hybrid).toBeLessThanOrEqual(1);
+        }
       }
     });
   });
