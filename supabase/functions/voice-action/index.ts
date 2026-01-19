@@ -1,94 +1,46 @@
- 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { validateTwilioRequest } from "../_shared/twilioValidator.ts";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+serve(async (req) => {
+  const contentType = req.headers.get("content-type") || "";
+
+  // CASE A: TWILIO STATUS CALLBACK (Form Data)
+  // Configured in Twilio Console: "Call Status Changes" -> Point to this URL
+  if (contentType.includes("application/x-www-form-urlencoded")) {
+    const formData = await req.formData();
+    const callStatus = formData.get("CallStatus");
+    const callSid = formData.get("CallSid");
+    const caller = formData.get("Caller");
+
+    console.log(`[Call Status] ${callSid}: ${callStatus}`);
+
+    // RECOVERY LOGIC: If call failed or dropped, send SMS
+    if (callStatus === "failed" || callStatus === "busy" || callStatus === "no-answer") {
+      console.log(`[Recovery] ⚠️ Initiating SMS Recovery for ${caller}`);
+      // Trigger internal send-sms logic here
+      // await supabase.functions.invoke('send-sms', { body: { to: caller, type: 'recovery' } })
+    }
+    return new Response("OK");
   }
 
-  try {
-    const url = new URL(req.url);
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const FORWARD_TARGET_E164 = Deno.env.get('BUSINESS_TARGET_E164');
+  // CASE B: AI TOOL CALL (JSON)
+  // OpenAI calls this via 'fetch' to execute business logic
+  if (contentType.includes("application/json")) {
+    const { action, params } = await req.json();
+    console.log(`[Tool Exec] ${action}`, params);
 
-    if (!FORWARD_TARGET_E164) {
-      console.error('Missing BUSINESS_TARGET_E164 environment variable');
-      throw new Error('Configuration error: Missing fallback number');
+    if (action === "check_schedule") {
+      // Mock DB check
+      return new Response(JSON.stringify({
+        status: "success",
+        available: true,
+        slot: "2pm",
+        script: "I have a 2 PM slot open. Shall I book it?" // "Closed Loop" Scripting
+      }), { headers: { "Content-Type": "application/json" } });
     }
-
-    // SECURITY: Validate Twilio signature to prevent webhook spoofing
-    const params = await validateTwilioRequest(req, url.toString());
-
-    const CallSid = params['CallSid'];
-    const Digits = params['Digits'];
-    const To = params['To'];
-    const recordingEnabled = url.searchParams.get('recording_enabled') === 'true';
-
-    console.log('DTMF action received (signature validated):', { CallSid, Digits });
-
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-    let twiml: string;
-
-    if (Digits === '0') {
-      // User pressed 0 - bridge to human
-      console.log('DTMF-0 detected: Bridging to human at', FORWARD_TARGET_E164);
-      
-      await supabase
-        .from('call_logs')
-        .update({ 
-          handoff: true,
-          handoff_reason: 'dtmf_0_user_request',
-          mode: 'bridge'
-        })
-        .eq('call_sid', CallSid);
-
-      const dialRecordAttr = recordingEnabled ? "record-from-answer" : "do-not-record";
-      twiml = `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Say voice="Polly.Joanna">Connecting you now.</Say>
-  <Dial callerId="${To}" record="${dialRecordAttr}" recordingStatusCallback="https://${supabaseUrl.replace('https://', '')}/functions/v1/voice-status">
-    <Number>${FORWARD_TARGET_E164}</Number>
-  </Dial>
-</Response>`;
-    } else {
-      // Continue with LLM stream
-      twiml = `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Connect>
-    <Stream url="wss://${supabaseUrl.replace('https://', '')}/functions/v1/voice-stream?callSid=${CallSid}" />
-  </Connect>
-</Response>`;
-    }
-
-    return new Response(twiml, {
-      headers: {
-        ...corsHeaders,
-        'Content-Type': 'text/xml',
-      },
-    });
-  } catch (error) {
-    console.error('Error handling DTMF action:', error);
-    
-    const errorTwiml = `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Say voice="Polly.Joanna">We're sorry, but we're experiencing technical difficulties.</Say>
-  <Hangup/>
-</Response>`;
-
-    return new Response(errorTwiml, {
-      headers: {
-        ...corsHeaders,
-        'Content-Type': 'text/xml',
-      },
-    });
   }
+
+  return new Response("Unknown Request Type", { status: 400 });
 });
-

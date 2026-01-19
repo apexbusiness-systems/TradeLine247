@@ -52,7 +52,8 @@ The voice system uses:
 - **OpenAI Realtime API**: Speech-to-text + conversational AI
 - **ElevenLabs TTS**: High-quality text-to-speech synthesis
 - **Twilio**: Phone call handling and streaming
-- **Supabase Edge Functions**: Serverless voice processing
+- **Node.js Voice Server**: Real-time WebSocket handling (`server.cjs`)
+- **Supabase Edge Functions**: Auxiliary business logic
 
 ## Files Modified
 - `.env.local`: Feature flags and API key placeholders added
@@ -66,3 +67,44 @@ The voice system uses:
 
 ---
 **Status**: Voice AI enabled, ready for API key configuration and testing.
+
+# Voice AI Enablement - January 19, 2026 (V2 Enterprise Upgrade)
+
+## V2 Enterprise Architecture
+
+We have completely re-engineered the telephony stack to a "Zero-Latency, Closed-Loop" architecture using Supabase Edge Functions.
+
+### 1. The Secure Gatekeeper (`voice-frontdoor`)
+**Objective**: Secure entry and Context Injection.
+- **Trace ID**: Generates a unique `traceId` for every call for full-stack observability.
+- **Context Handoff**: Passes `traceId`, `callerNumber`, and `callSid` as secure parameters to the WebSocket stream.
+- **Strict TwiML**: Uses a clean, minimal TwiML response to hand off to the neural core immediately.
+
+### 2. The Context-Aware Brain (`voice-stream`)
+**Objective**: Zero-Latency Intelligence.
+- **Pre-Speech Lookup**: Queries Supabase for caller identity (`clients` table) *before* the AI sends its first audio packet.
+- **Dynamic Context Injection**: Injects user name, history, and status directly into the System Prompt (`ADELINE_PROMPT`) via `session.update`.
+- **Latency Tuning**:
+  - `prefix_padding_ms`: 300ms
+  - `silence_duration_ms`: 400ms (Snappy, conversational turn-taking)
+  - `threshold`: 0.6 (Reduces false interruptions)
+
+### 3. The Recovery Multiplexer (`voice-action`)
+**Objective**: Robustness and Closed-Loop Tooling.
+- **Dual-Mode Handler**: Handles both **Twilio Status Callbacks** (Form Data) and **OpenAI Tool Calls** (JSON) in a single function.
+- **Auto-Recovery**: Detects `failed`, `busy`, or `no-answer` call statuses and prepares for SMS recovery logic.
+- **Closed-Loop Tools**: Implements `check_schedule` stub that returns valid JSON instructions to the AI, forcing it to confirm actions with the user.
+
+## V2 Files Modified
+- `supabase/functions/voice-frontdoor/index.ts`: COMPLETE REWRITE
+- `supabase/functions/voice-stream/index.ts`: COMPLETE REWRITE
+- `supabase/functions/voice-action/index.ts`: COMPLETE REWRITE
+- `supabase/functions/_shared/personas.ts`: Added "Ironclad" System Prompt
+
+## V2 Deployment
+Requires Supabase CLI (clean state):
+```bash
+supabase functions deploy voice-frontdoor --no-verify-jwt
+supabase functions deploy voice-stream --no-verify-jwt
+supabase functions deploy voice-action --no-verify-jwt
+```

@@ -139,7 +139,9 @@ TradeLine247/
 ├── tests/                # Test files
 ├── ios/                  # iOS Capacitor project
 ├── android/              # Android Capacitor project
-└── scripts/              # Build and utility scripts
+├── scripts/              # Build and utility scripts
+├── server.cjs            # Production Voice Server (Node.js)
+└── .env.example          # Environment variables template
 ```
 
 ## 🎯 Key Features
@@ -183,7 +185,7 @@ VOICE_TEST_ALLOWLIST=+15551234567,+15559876543
 ### Twilio Console Configuration
 
 #### 1. Voice Webhook (Inbound Calls)
-- **URL**: `https://your-project.supabase.co/functions/v1/telephony-voice`
+- **URL**: `https://<your-railway-app-url>/voice-answer`
 - **Method**: `POST`
 - **Voice Settings**: Accept incoming calls
 
@@ -265,6 +267,8 @@ npm run build:android
 - **GitHub Actions**: Automated testing and deployment
 - **Codemagic**: iOS/Android mobile builds
 - **Vercel**: Web deployment with preview environments
+- **Railway**: Node.js Voice Server deployment
+
 
 ## 🔧 Development Scripts
 
