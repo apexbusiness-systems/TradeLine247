@@ -52,7 +52,8 @@ The voice system uses:
 - **OpenAI Realtime API**: Speech-to-text + conversational AI
 - **ElevenLabs TTS**: High-quality text-to-speech synthesis
 - **Twilio**: Phone call handling and streaming
-- **Supabase Edge Functions**: Serverless voice processing
+- **Node.js Voice Server**: Real-time WebSocket handling (`server.cjs`)
+- **Supabase Edge Functions**: Auxiliary business logic
 
 ## Files Modified
 - `.env.local`: Feature flags and API key placeholders added
