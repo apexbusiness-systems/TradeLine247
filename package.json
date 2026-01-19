@@ -142,7 +142,7 @@
     "twilio": "5.0.1",
     "ws": "^8.17.1",
     "zod": "^4.3.5",
-    "zustand": "^5.0.9"
+    "zustand": "^5.0.10"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.0",
