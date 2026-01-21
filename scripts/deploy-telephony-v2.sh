@@ -9,14 +9,14 @@ echo ""
 
 # Check if supabase CLI is available
 if ! command -v supabase &> /dev/null; then
-    echo "❌ Error: Supabase CLI not found. Please install it first."
-    echo "   npm install -g supabase"
+    echo "❌ Error: Supabase CLI not found. Please install it first." >&2
+    echo "   npm install -g supabase" >&2
     exit 1
 fi
 
 # Verify we're in the right directory
-if [ ! -d "supabase/functions" ]; then
-    echo "❌ Error: Not in project root. Please run from TradeLine247 directory."
+if [[ ! -d "supabase/functions" ]]; then
+    echo "❌ Error: Not in project root. Please run from TradeLine247 directory." >&2
     exit 1
 fi
 
@@ -34,13 +34,13 @@ for var in "${REQUIRED_VARS[@]}"; do
     fi
 done
 
-if [ ${#MISSING_VARS[@]} -gt 0 ]; then
-    echo "⚠️  Warning: Missing environment variables:"
+if [[ ${#MISSING_VARS[@]} -gt 0 ]]; then
+    echo "⚠️  Warning: Missing environment variables:" >&2
     for var in "${MISSING_VARS[@]}"; do
-        echo "   - $var"
+        echo "   - $var" >&2
     done
-    echo ""
-    echo "Set them with: supabase secrets set $var=value"
+    echo "" >&2
+    echo "Set them with: supabase secrets set $var=value" >&2
     read -p "Continue anyway? (y/N) " -n 1 -r
     echo
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then

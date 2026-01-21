@@ -4,7 +4,7 @@ import { validateTwilioRequest } from "../_shared/twilioValidator.ts";
 serve(async (req) => {
   // 1. SECURITY (Production Guardrail)
   // Validate Twilio signature to prevent spoofing attacks
-  const formData = await req.formData();
+  // Validate Twilio signature to prevent spoofing attacks
   const url = new URL(req.url);
   const fullUrl = `${url.protocol}//${url.host}${url.pathname}${url.search}`;
 
