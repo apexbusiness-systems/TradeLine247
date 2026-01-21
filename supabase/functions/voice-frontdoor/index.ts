@@ -1,23 +1,32 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { validateTwilioRequest } from "../_shared/twilioValidator.ts"; // Ensure this exists or mock simple validation
+import { validateTwilioRequest } from "../_shared/twilioValidator.ts";
 
 serve(async (req) => {
-  // 1. SECURITY: Validate Request (Skip in local dev if needed, strictly enforce in Prod)
-  // const isValid = await validateTwilioRequest(req); 
-  // if (!isValid) return new Response("Forbidden", { status: 403 });
+  // 1. SECURITY (Production Guardrail)
+  // Validate Twilio signature to prevent spoofing attacks
+  const formData = await req.formData();
+  const url = new URL(req.url);
+  const fullUrl = `${url.protocol}//${url.host}${url.pathname}${url.search}`;
+
+  try {
+    await validateTwilioRequest(req, fullUrl);
+  } catch (error) {
+    console.error(`[Frontdoor] ❌ Security validation failed: ${error}`);
+    return new Response("Forbidden", { status: 403 });
+  }
 
   const { headers } = req;
   const host = headers.get("host") || "";
   const wssUrl = `wss://${host}/functions/v1/voice-stream`;
 
   // 2. CONTEXT PREPARATION: Trace ID & Caller ID
-  // We generate a traceId here to track the entire call lifecycle
+  // Generate a traceId to track the entire call lifecycle
   const traceId = crypto.randomUUID();
 
   console.log(`[Frontdoor] 📞 Call Incoming. Trace: ${traceId} | Handoff -> ${wssUrl}`);
 
-  // 3. TwiML HANDOFF
-  // We pass callerNumber and traceId as parameters to the WebSocket
+  // 3. TwiML HANDOFF WITH CONTEXT
+  // Pass caller identity directly into stream parameters for zero-latency lookup
   const twiml = `
     <Response>
       <Connect>
@@ -28,7 +37,7 @@ serve(async (req) => {
         </Stream>
       </Connect>
       <Pause length="1" />
-      <Say>I am having trouble connecting to the neural core. Please try again.</Say>
+      <Say>System requires maintenance. Please try again later.</Say>
     </Response>
   `;
 
