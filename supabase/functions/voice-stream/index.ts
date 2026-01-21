@@ -23,6 +23,27 @@ serve(async (req) => {
   let streamSid = "";
   let traceId = "";
   let callSid = "";
+  let callerNumber = "";
+
+  // --- RECOVERY MECHANISM ---
+  const triggerSmsRecovery = async (to: string, trace: string) => {
+    console.log(`[Stream] 🛡️ Triggering SMS Safety Net | Trace: ${trace}`);
+    try {
+      await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/send-sms`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          to,
+          body: "Sorry, we lost connection. How can I help you?"
+        })
+      });
+    } catch (e) {
+      console.error(`[Stream] ❌ SMS Failed | Trace: ${trace}`, e);
+    }
+  };
 
   // --- OPENAI HANDLERS ---
   openAIWs.onopen = () => {
@@ -35,6 +56,11 @@ serve(async (req) => {
 
   openAIWs.onclose = () => {
     console.log(`[Stream] 🔌 OpenAI Disconnected | Trace: ${traceId}`);
+    if (socket.readyState === WebSocket.OPEN) {
+      console.error(`[Stream] ⚠️ OpenAI Closed Prematurely | Trace: ${traceId}`);
+      if (callerNumber) triggerSmsRecovery(callerNumber, traceId);
+      socket.close();
+    }
   };
 
   openAIWs.onmessage = (e) => {
@@ -67,6 +93,10 @@ serve(async (req) => {
     // 4. ERROR HANDLING
     if (response.type === "error") {
       console.error(`[Stream] ❌ OpenAI Error | Trace: ${traceId} | Error:`, response.error);
+      if (socket.readyState === WebSocket.OPEN) {
+        if (callerNumber) triggerSmsRecovery(callerNumber, traceId);
+        socket.close();
+      }
     }
   };
 
@@ -89,7 +119,7 @@ serve(async (req) => {
       streamSid = msg.start.streamSid;
       traceId = msg.start.customParameters?.traceId || crypto.randomUUID();
       callSid = msg.start.customParameters?.callSid || "unknown";
-      const callerNumber = msg.start.customParameters?.callerNumber || "unknown";
+      callerNumber = msg.start.customParameters?.callerNumber || "unknown";
 
       console.log(`[Stream] 🚀 Call Started | Trace: ${traceId} | Caller: ${callerNumber} | CallSid: ${callSid}`);
 
@@ -99,6 +129,7 @@ serve(async (req) => {
       let clientName = "there";
 
       try {
+        const startLookup = performance.now();
         const { data: client, error } = await supabase
           .from("clients")
           .select("first_name, last_name, id")
@@ -107,18 +138,39 @@ serve(async (req) => {
 
         if (client && !error) {
           clientName = client.first_name || "there";
-          userContext = `Known Client: ${client.first_name} ${client.last_name} (ID: ${client.id}). Status: PREFERRED CLIENT.`;
           console.log(`[Stream] 👤 Client Identified | Trace: ${traceId} | Client: ${client.first_name} ${client.last_name}`);
 
-          // TODO: Query active tickets/support cases here
-          // const { data: tickets } = await supabase
-          //   .from("tickets")
-          //   .select("id, subject, status")
-          //   .eq("client_id", client.id)
-          //   .eq("status", "open");
-          // if (tickets?.length) {
-          //   userContext += `\nActive Tickets: ${tickets.map(t => `#${t.id} - ${t.subject}`).join(", ")}`;
-          // }
+          // PARALLEL CONTEXT LOOKUP (Tickets & Bookings) with Strict Timeout
+          const dbLookupPromise = Promise.all([
+            supabase.from("tickets").select("id, subject, status").eq("client_id", client.id).eq("status", "open").limit(3),
+            supabase.from("bookings").select("id, check_in_date, status").eq("client_id", client.id).order("check_in_date", { ascending: false }).limit(3)
+          ]);
+
+          const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve([{ data: [] }, { data: [] }]), 150));
+
+          const [ticketsResult, bookingsResult] = await Promise.race([
+            dbLookupPromise,
+            timeoutPromise
+          ]) as [{ data: any[] | null }, { data: any[] | null }];
+
+          const tickets = ticketsResult.data || [];
+          const bookings = bookingsResult.data || [];
+
+          userContext = `Known Client: ${client.first_name} ${client.last_name} (ID: ${client.id}). Status: PREFERRED CLIENT.`;
+
+          if (tickets.length) {
+            userContext += `\nOPEN TICKETS: ${tickets.map(t => `#${t.id} (${t.subject})`).join(", ")}`;
+          } else {
+            userContext += `\nNo open support tickets.`;
+          }
+
+          if (bookings.length) {
+            userContext += `\nRECENT BOOKINGS: ${bookings.map(b => `${b.check_in_date} (${b.status})`).join(", ")}`;
+          }
+
+          const duration = performance.now() - startLookup;
+          console.log(`[Stream] ⚡ Context Loaded in ${duration.toFixed(2)}ms | Tickets: ${tickets.length} | Bookings: ${bookings.length}`);
+
         } else {
           console.log(`[Stream] 🆕 New Caller | Trace: ${traceId} | Phone: ${callerNumber}`);
         }
