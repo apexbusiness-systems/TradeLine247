@@ -176,14 +176,17 @@ async function testTools() {
 }
 
 // --- RUNNER ---
-(async () => {
-    try {
-        await seedClient();
-        await testFrontdoor();
-        await testRecovery();
-        await testTools();
-        console.log("\n✨ Sandbox Validation Complete.");
-    } catch (error) {
-        console.error("\n❌ Test Suite Failed:", error);
-    }
-})();
+// --- RUNNER ---
+try {
+    await seedClient();
+    await testFrontdoor();
+    await testRecovery();
+    await testTools();
+    console.log("\n✨ Sandbox Validation Complete.");
+} catch (error) {
+    console.error("\n❌ Test Suite Failed:");
+    console.error(error);
+    if (error.cause) console.error("Cause:", error.cause);
+    if (error.message) console.error("Message:", error.message);
+    process.exit(1);
+}

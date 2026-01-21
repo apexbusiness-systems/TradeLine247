@@ -57,7 +57,7 @@
     "test:onboarding:mock": "node testing/onboarding/mock-onboarding-server.js",
     "test:onboarding:e2e": "playwright test tests/onboarding/",
     "omnlink:health": "node scripts/omnlink-health.mjs",
-    "start": "node server.cjs",
+    "start": "node server.mjs",
     "// supabase function (secret-encrypt)": "───────────────",
     "check:fn:secret-encrypt": "npx deno@latest check supabase/functions/secret-encrypt/index.ts",
     "deploy:fn:secret-encrypt": "node ./scripts/deploy-secret-encrypt.cjs",
