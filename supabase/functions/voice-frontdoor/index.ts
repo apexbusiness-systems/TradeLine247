@@ -37,7 +37,7 @@ serve(async (req) => {
         </Stream>
       </Connect>
       <Pause length="1" />
-      <Say>System requires maintenance. Please try again later.</Say>
+      <Say>Sorry, we are experiencing a temporary connection issue. I have sent you a text message to help you right away.</Say>
     </Response>
   `;
 
