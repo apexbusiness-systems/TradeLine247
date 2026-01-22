@@ -341,7 +341,7 @@ Deno.serve(async (req) => {
   async function connectToOpenAIWithTimeout(apiKey: string, callSid: string): Promise<WebSocket> {
     return new Promise((resolve, reject) => {
       const timeoutId = setTimeout(() => {
-        console.error(`[${callSid}] OpenAI connection timeout after ${OPENAI_TIMEOUT_MS}ms`);
+        console.error(`[${sanitizeForLogging(callSid)}] OpenAI connection timeout after ${OPENAI_TIMEOUT_MS}ms`);
         reject(new Error('OpenAI connection timeout'));
       }, OPENAI_TIMEOUT_MS);
 
@@ -358,19 +358,19 @@ Deno.serve(async (req) => {
 
         ws.onopen = () => {
           clearTimeout(timeoutId);
-          console.log(`[${callSid}] ✅ Connected to OpenAI Realtime API`);
+          console.log(`[${sanitizeForLogging(callSid)}] ✅ Connected to OpenAI Realtime API`);
           resolve(ws);
         };
 
         ws.onerror = (error) => {
           clearTimeout(timeoutId);
-          console.error(`[${callSid}] OpenAI WebSocket connection error:`, error);
+          console.error(`[${sanitizeForLogging(callSid)}] OpenAI WebSocket connection error:`, sanitizeForLogging(String(error)));
           reject(new Error('OpenAI WebSocket connection failed'));
         };
 
       } catch (error) {
         clearTimeout(timeoutId);
-        console.error(`[${callSid}] Failed to create OpenAI WebSocket:`, error);
+        console.error(`[${sanitizeForLogging(callSid)}] Failed to create OpenAI WebSocket:`, sanitizeForLogging(String(error)));
         reject(error);
       }
     });
@@ -561,7 +561,7 @@ Deno.serve(async (req) => {
         const functionName = data.name;
         const args = JSON.parse(data.arguments);
 
-        console.log(`Tool call detected: ${functionName}`, args);
+        console.log(`Tool call detected: ${sanitizeForLogging(functionName)}`, sanitizeForLogging(JSON.stringify(args)));
 
         if (functionName === "transfer_to_lisa") {
           const context = `[HANDOFF FROM ADELINE]\nCaller: ${args.caller_name || 'Unknown'}\nInterest: ${args.specific_interest}\nReason: ${args.call_reason}\nSentiment: ${args.sentiment}`;
@@ -632,7 +632,7 @@ Deno.serve(async (req) => {
           } catch { }
         }
       } else if (data.type === 'error') {
-        console.error('OpenAI error:', data.error);
+        console.error('OpenAI error:', sanitizeForLogging(JSON.stringify(data.error)));
 
         // Fail open: bridge to human
         if (config?.fail_open !== false) {
@@ -644,7 +644,7 @@ Deno.serve(async (req) => {
       }
 
       openaiWs.onerror = (error) => {
-        console.error('OpenAI WebSocket error:', error);
+        console.error('OpenAI WebSocket error:', sanitizeForLogging(String(error)));
       };
 
       openaiWs.onclose = () => {
@@ -654,7 +654,7 @@ Deno.serve(async (req) => {
     };
 
   } catch (error) {
-    console.error('Failed to connect to OpenAI:', error);
+    console.error('Failed to connect to OpenAI:', sanitizeForLogging(String(error)));
     socket.close(1011, 'OpenAI connection failed');
     return response;
   }
