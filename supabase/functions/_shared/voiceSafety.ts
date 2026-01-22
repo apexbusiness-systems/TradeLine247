@@ -160,13 +160,13 @@ export function performSafetyCheck(
 export function sanitizeForLogging(text: string): string {
   // SECURITY: Remove newlines and carriage returns to prevent log injection
   // This prevents malicious users from forging log entries with \n or \r characters
-  let sanitized = text.replace(/\n|\r/g, " ");
+  let sanitized = text.replaceAll(/[\n\r]/g, " ");
   // Remove phone numbers (E.164 format)
-  sanitized = sanitized.replace(/\+\d{10,15}/g, '[PHONE]');
+  sanitized = sanitized.replaceAll(/\+\d{10,15}/g, '[PHONE]');
   // Remove email addresses
-  sanitized = sanitized.replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, '[EMAIL]');
+  sanitized = sanitized.replaceAll(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, '[EMAIL]');
   // Remove credit card patterns (basic)
-  sanitized = sanitized.replace(/\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/g, '[CARD]');
+  sanitized = sanitized.replaceAll(/\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/g, '[CARD]');
   return sanitized;
 }
 
