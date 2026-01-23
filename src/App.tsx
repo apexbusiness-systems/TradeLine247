@@ -38,6 +38,7 @@ const ClientNumberOnboarding = lazy(() => import("./pages/ops/ClientNumberOnboar
 const VoiceSettings = lazy(() => import("./pages/ops/VoiceSettings"));
 const MessagingHealth = lazy(() => import("./pages/ops/MessagingHealth"));
 const VoiceHealth = lazy(() => import("./pages/ops/VoiceHealth"));
+const OmniPortHealth = lazy(() => import("./pages/ops/OmniPortHealth"));
 const TwilioEvidence = lazy(() => import("./pages/ops/TwilioEvidence"));
 const TeamInvite = lazy(() => import("./pages/TeamInvite"));
 const PhoneApps = lazy(() => import("./pages/PhoneApps"));
@@ -86,6 +87,7 @@ const routeEntries: Array<{ path: string; element: React.ReactNode }> = [
   { path: paths.forwardingWizard, element: <ForwardingWizard /> },
   { path: paths.messagingHealth, element: <MessagingHealth /> },
   { path: paths.voiceHealth, element: <VoiceHealth /> },
+  { path: paths.omniportHealth, element: <OmniPortHealth /> },
   { path: paths.twilioEvidence, element: <TwilioEvidence /> },
   { path: paths.previewHealth, element: <PreviewHealth /> },
   {
