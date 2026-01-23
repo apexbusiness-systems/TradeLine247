@@ -164,7 +164,7 @@ export function sanitizeForLogging(text: string): string {
   // Remove phone numbers (E.164 format)
   sanitized = sanitized.replaceAll(/\+\d{10,15}/g, '[PHONE]');
   // Remove email addresses
-  sanitized = sanitized.replaceAll(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, '[EMAIL]');
+  sanitized = sanitized.replaceAll(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*\.[a-zA-Z]{2,}/g, '[EMAIL]');
   // Remove credit card patterns (basic)
   sanitized = sanitized.replaceAll(/\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/g, '[CARD]');
   return sanitized;
