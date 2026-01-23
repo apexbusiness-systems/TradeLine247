@@ -131,6 +131,60 @@ GROUP BY route;
 - Identify slow queries
 - Monitor cold start frequency
 
+## OmniPort Ingress Engine Limits
+
+### Throughput Specifications
+
+| Metric | Limit | Notes |
+|--------|-------|-------|
+| **Requests per second** | 10,000+ | With idempotency deduplication |
+| **Content size** | 10KB | Truncated for pattern matching |
+| **Idempotency window** | 10 seconds | Duplicate detection window |
+| **Idempotency cache TTL** | 60 seconds | In-memory cache expiration |
+| **Device cache TTL** | 5 minutes | Zero-trust registry cache |
+
+### Dead Letter Queue (DLQ)
+
+| Parameter | Value | Notes |
+|-----------|-------|-------|
+| **Max queue size** | 10,000 entries | In-memory, oldest evicted |
+| **Max retry attempts** | 5 | Per event |
+| **Base retry delay** | 1 second | Exponential backoff |
+| **Max retry delay** | 5 minutes | Capped backoff |
+| **Jitter range** | 0.5x - 1.5x | CSPRNG-based |
+
+### Risk Classification
+
+| Lane | Score Range | Pattern Limit |
+|------|-------------|---------------|
+| GREEN | 0-29 | No restrictions |
+| YELLOW | 30-59 | Logged and monitored |
+| RED | 60-79 | Requires MAN Mode approval |
+| BLOCKED | 80-100 | Rejected, device flagged |
+
+### Database Tables
+
+| Table | Retention | Index Strategy |
+|-------|-----------|----------------|
+| `omniport_events` | 90 days | trace_id, source, org_id, created_at |
+| `omniport_dlq` | Until delivered/failed | status, next_retry_at |
+| `omniport_metrics` | 30 days | metric_window DESC |
+| `omniport_devices` | Indefinite | device_id, org_id, user_id |
+
+### Monitoring Endpoints
+
+- **Metrics API:** `GET /functions/v1/omniport-metrics`
+  - Query params: `range` (1h, 24h, 7d), `format` (summary, detailed, timeseries)
+- **Health Dashboard:** `/ops/omniport-health`
+  - Auto-refresh: 30 seconds
+
+### Optimization Tips
+
+1. **High DLQ depth** (> 10): Check downstream handler availability
+2. **Low success rate** (< 95%): Review BLOCKED lane patterns
+3. **High P95 latency** (> 100ms): Check database connection pool
+4. **Device trust revocations**: May indicate attack or misconfigured client
+
 ## Compute Credits Watchlist
 
 ### High-Cost Operations

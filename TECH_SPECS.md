@@ -2,8 +2,8 @@
 
 **Enterprise AI Receptionist Platform - Complete Technical Architecture**
 
-**Version:** 1.0.7
-**Last Updated:** January 6, 2026
+**Version:** 1.1.0
+**Last Updated:** January 23, 2026
 **Document Classification:** Public - Technical Marketing
 
 ---
@@ -52,11 +52,19 @@
 ┌─────────────────────────────────────────────────────────────────┐
 │                    TradeLine 24/7 Platform                       │
 ├─────────────────────────────────────────────────────────────────┤
+│  PRESENTATION LAYER                                              │
 │  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐         │
 │  │   Web App   │    │   iOS App   │    │ Android App │         │
-│  │ React/Type- │    │ Capacitor   │    │ Capacitor   │         │
-│  │ Script      │    │ Native      │    │ Native      │         │
-│  └─────────────┘    └─────────────┘    └─────────────┘         │
+│  │ React/TS    │    │ Capacitor   │    │ Capacitor   │         │
+│  └──────┬──────┘    └──────┬──────┘    └──────┬──────┘         │
+├─────────┴──────────────────┴──────────────────┴─────────────────┤
+│  OMNIPORT (Universal Ingress Engine)                             │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  Zero-Trust Gate ─► Idempotency ─► Risk Classification  │   │
+│  │  (DeviceRegistry)   (FNV-1a)       (GREEN/YELLOW/RED)   │   │
+│  │                          │                               │   │
+│  │  DLQ + Circuit Breaker ◄─┴─► Metrics & Observability    │   │
+│  └─────────────────────────────────────────────────────────┘   │
 ├─────────────────────────────────────────────────────────────────┤
 │  ┌─────────────────────────────────────────────────────────┐   │
 │  │                 Vercel Edge Network                     │   │
@@ -116,6 +124,79 @@
 - **Rate Limiting:** Per-user and per-endpoint limits with burst capacity
 - **Caching Strategy:** Redis-based caching with TTL management
 - **Webhook Support:** Real-time notifications for external systems
+
+### OmniPort Universal Ingress Engine
+
+OmniPort is the unified ingress layer that processes all incoming requests from text, voice, webhooks, and API sources with production-grade reliability and security.
+
+#### Core Components
+
+| Component | Purpose | Technology |
+|-----------|---------|------------|
+| **Zero-Trust Gate** | Device validation and fingerprinting | DeviceRegistry with trust scoring |
+| **Idempotency Wrapper** | Deduplication at 10K+ req/sec | FNV-1a 32-bit hash |
+| **Semantic Normalizer** | Unified CanonicalEvent format | Source-specific transformations |
+| **Risk Classifier** | 4-lane security assessment | Pattern matching with ReDoS protection |
+| **Resilient Dispatch** | Fault-tolerant delivery | Circuit breaker + DLQ |
+| **Metrics Collector** | Real-time observability | P95 latency, success rates |
+
+#### Risk Classification Lanes
+
+| Lane | Risk Score | Action | Use Case |
+|------|------------|--------|----------|
+| **GREEN** | 0-29 | Execute immediately | Normal requests |
+| **YELLOW** | 30-59 | Execute with monitoring | Config changes, urgency indicators |
+| **RED** | 60-79 | Escalate to MAN Mode | Financial actions, sensitive data |
+| **BLOCKED** | 80-100 | Security review required | SQL injection, XSS attempts |
+
+#### Input Sources Supported
+
+- **Text:** SMS, chat messages, form submissions
+- **Voice:** Twilio Media Streams, transcription events
+- **Webhook:** Twilio callbacks, Stripe events, Gmail notifications
+- **API:** Direct REST API calls
+- **RCS:** Rich Communication Services messages
+- **WhatsApp:** WhatsApp Business API messages
+
+#### Metrics API Response
+
+```json
+{
+  "totalRequests": 10537,
+  "successRate": "99.2%",
+  "p95Latency": "47ms",
+  "healthStatus": "healthy",
+  "dlqDepth": 3,
+  "bySource": {
+    "text": 7234,
+    "voice": 2156,
+    "webhook": 1147
+  },
+  "byLane": {
+    "GREEN": 9800,
+    "YELLOW": 600,
+    "RED": 100,
+    "BLOCKED": 37
+  }
+}
+```
+
+#### Database Tables
+
+| Table | Purpose | Key Fields |
+|-------|---------|------------|
+| `omniport_devices` | Device registry | device_id, fingerprint, trusted, risk_score |
+| `omniport_events` | Event log | id, source, risk_lane, content, processed_at |
+| `omniport_dlq` | Dead letter queue | event_data, attempts, next_retry_at, status |
+| `omniport_metrics` | Aggregated metrics | metric_window, by source/lane counts, latencies |
+
+#### Security Features
+
+- **ReDoS Protection:** Length-limited regex patterns prevent catastrophic backtracking
+- **Content Truncation:** 10KB limit on pattern matching input
+- **CSPRNG Jitter:** Cryptographically secure random for retry backoff
+- **Device Fingerprinting:** Detects fingerprint mismatches for fraud prevention
+- **Automatic Trust Revocation:** High-risk scores trigger device lockout
 
 ---
 
