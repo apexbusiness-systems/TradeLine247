@@ -351,8 +351,11 @@ class DeadLetterQueue {
 
   private calculateBackoff(attempt: number): number {
     // Exponential backoff with jitter: base * 2^attempt * (0.5-1.5)
+    // Using crypto.getRandomValues for CSPRNG jitter (satisfies security scanners)
     const exponential = this.baseRetryMs * Math.pow(2, attempt);
-    const jitter = 0.5 + Math.random();
+    const randomBuffer = new Uint32Array(1);
+    crypto.getRandomValues(randomBuffer);
+    const jitter = 0.5 + (randomBuffer[0] / 0xFFFFFFFF); // 0.5 to 1.5 range
     return Math.min(exponential * jitter, 300000); // Max 5 minutes
   }
 }
