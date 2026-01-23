@@ -474,19 +474,21 @@ interface RiskPattern {
   flag: string;
 }
 
+// ReDoS-safe patterns: Use non-greedy quantifiers (.*?) and length limits ({0,100})
+// to prevent catastrophic backtracking on malicious input
 const RISK_PATTERNS: RiskPattern[] = [
-  // BLOCKED - Security threats
-  { pattern: /(\bUNION\b.*\bSELECT\b|\bDROP\b.*\bTABLE\b)/i, severity: 100, lane: 'BLOCKED', flag: 'sql_injection' },
-  { pattern: /<script\b[^>]*>|javascript:/i, severity: 100, lane: 'BLOCKED', flag: 'xss_attempt' },
-  { pattern: /\$\{.*\}|\{\{.*\}\}/i, severity: 90, lane: 'BLOCKED', flag: 'template_injection' },
+  // BLOCKED - Security threats (ReDoS-safe: limited match length)
+  { pattern: /(\bUNION\b.{0,50}\bSELECT\b|\bDROP\b.{0,30}\bTABLE\b)/i, severity: 100, lane: 'BLOCKED', flag: 'sql_injection' },
+  { pattern: /<script\b[^>]{0,100}>|javascript:/i, severity: 100, lane: 'BLOCKED', flag: 'xss_attempt' },
+  { pattern: /\$\{[^}]{0,100}\}|\{\{[^}]{0,100}\}\}/i, severity: 90, lane: 'BLOCKED', flag: 'template_injection' },
 
-  // RED - High risk, requires human review
-  { pattern: /\b(delete|remove|cancel|terminate|refund)\b.*\b(all|everything|account)\b/i, severity: 70, lane: 'RED', flag: 'destructive_intent' },
-  { pattern: /\b(transfer|send|wire)\b.*\b(money|funds|\$\d+)\b/i, severity: 75, lane: 'RED', flag: 'financial_action' },
+  // RED - High risk, requires human review (ReDoS-safe: limited match length)
+  { pattern: /\b(delete|remove|cancel|terminate|refund)\b.{0,50}\b(all|everything|account)\b/i, severity: 70, lane: 'RED', flag: 'destructive_intent' },
+  { pattern: /\b(transfer|send|wire)\b.{0,50}\b(money|funds|\$\d+)\b/i, severity: 75, lane: 'RED', flag: 'financial_action' },
   { pattern: /\b(password|credential|token|secret)\b/i, severity: 60, lane: 'RED', flag: 'sensitive_data' },
 
-  // YELLOW - Medium risk, execute with monitoring
-  { pattern: /\b(update|change|modify)\b.*\b(settings|config|profile)\b/i, severity: 40, lane: 'YELLOW', flag: 'config_change' },
+  // YELLOW - Medium risk, execute with monitoring (ReDoS-safe: limited match length)
+  { pattern: /\b(update|change|modify)\b.{0,50}\b(settings|config|profile)\b/i, severity: 40, lane: 'YELLOW', flag: 'config_change' },
   { pattern: /\b(urgent|emergency|asap|immediately)\b/i, severity: 30, lane: 'YELLOW', flag: 'urgency_indicator' },
 ];
 
@@ -495,8 +497,12 @@ function classifyRisk(content: string, deviceRiskScore: number): { lane: RiskLan
   let maxSeverity = deviceRiskScore;
   let lane: RiskLane = 'GREEN';
 
+  // ReDoS protection: Truncate content to prevent regex DoS on very long inputs
+  // 10KB is more than enough for any legitimate message content
+  const safeContent = content.length > 10000 ? content.slice(0, 10000) : content;
+
   for (const riskPattern of RISK_PATTERNS) {
-    if (riskPattern.pattern.test(content)) {
+    if (riskPattern.pattern.test(safeContent)) {
       flags.push(riskPattern.flag);
       if (riskPattern.severity > maxSeverity) {
         maxSeverity = riskPattern.severity;
