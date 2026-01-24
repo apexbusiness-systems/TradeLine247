@@ -131,59 +131,45 @@ GROUP BY route;
 - Identify slow queries
 - Monitor cold start frequency
 
-## OmniPort Ingress Engine Limits
+## OmniPort Platform Integration
 
-### Throughput Specifications
+TradeLine 24/7 connects as a client to the OmniPort universal ingress platform. The following limits apply to our integration.
 
-| Metric | Limit | Notes |
-|--------|-------|-------|
-| **Requests per second** | 10,000+ | With idempotency deduplication |
-| **Content size** | 10KB | Truncated for pattern matching |
-| **Idempotency window** | 10 seconds | Duplicate detection window |
-| **Idempotency cache TTL** | 60 seconds | In-memory cache expiration |
-| **Device cache TTL** | 5 minutes | Zero-trust registry cache |
+### Client Connection Limits
 
-### Dead Letter Queue (DLQ)
-
-| Parameter | Value | Notes |
+| Parameter | Limit | Notes |
 |-----------|-------|-------|
-| **Max queue size** | 10,000 entries | In-memory, oldest evicted |
-| **Max retry attempts** | 5 | Per event |
-| **Base retry delay** | 1 second | Exponential backoff |
-| **Max retry delay** | 5 minutes | Capped backoff |
-| **Jitter range** | 0.5x - 1.5x | CSPRNG-based |
+| **API requests per minute** | 1,000 | Per service key |
+| **Metrics fetch interval** | 30 seconds minimum | Dashboard auto-refresh |
+| **Event payload size** | 10KB | Per event submission |
+| **Concurrent connections** | 10 | Realtime subscriptions |
 
-### Risk Classification
+### OmniPort Platform Specifications (Reference)
 
-| Lane | Score Range | Pattern Limit |
-|------|-------------|---------------|
-| GREEN | 0-29 | No restrictions |
-| YELLOW | 30-59 | Logged and monitored |
-| RED | 60-79 | Requires MAN Mode approval |
-| BLOCKED | 80-100 | Rejected, device flagged |
+These are OmniPort platform capabilities (managed externally):
 
-### Database Tables
-
-| Table | Retention | Index Strategy |
-|-------|-----------|----------------|
-| `omniport_events` | 90 days | trace_id, source, org_id, created_at |
-| `omniport_dlq` | Until delivered/failed | status, next_retry_at |
-| `omniport_metrics` | 30 days | metric_window DESC |
-| `omniport_devices` | Indefinite | device_id, org_id, user_id |
+| Feature | Specification |
+|---------|---------------|
+| Throughput | 10,000+ req/sec with deduplication |
+| Risk Lanes | GREEN, YELLOW, RED, BLOCKED |
+| DLQ Retry | 5 attempts with exponential backoff |
+| Metrics Retention | 30 days |
 
 ### Monitoring Endpoints
 
-- **Metrics API:** `GET /functions/v1/omniport-metrics`
-  - Query params: `range` (1h, 24h, 7d), `format` (summary, detailed, timeseries)
+- **Metrics Proxy:** `GET /functions/v1/omniport-metrics`
+  - Fetches metrics FROM OmniPort platform
+  - Query params: `range` (1h, 24h, 7d), `format` (summary, detailed)
 - **Health Dashboard:** `/ops/omniport-health`
+  - Displays OmniPort platform status
   - Auto-refresh: 30 seconds
 
-### Optimization Tips
+### Troubleshooting
 
-1. **High DLQ depth** (> 10): Check downstream handler availability
-2. **Low success rate** (< 95%): Review BLOCKED lane patterns
-3. **High P95 latency** (> 100ms): Check database connection pool
-4. **Device trust revocations**: May indicate attack or misconfigured client
+1. **Connection failed**: Verify `OMNI_PORT_BASE_URL` and `OMNI_PORT_SERVICE_KEY` are set
+2. **503 Service Unavailable**: OmniPort platform may be down, check their status
+3. **401 Unauthorized**: Service key may be expired or revoked
+4. **High latency**: Check network connectivity to OmniPort platform
 
 ## Compute Credits Watchlist
 

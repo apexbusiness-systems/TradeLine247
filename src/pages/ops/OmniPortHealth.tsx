@@ -204,10 +204,10 @@ export default function OmniPortHealth() {
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-2">
             <Shield className="h-8 w-8 text-primary" />
-            OmniPort Health
+            OmniPort Platform
           </h1>
           <p className="text-muted-foreground">
-            Universal Ingress Engine - Zero-Trust Gate, Metrics & Observability
+            Connected to OmniPort Universal Ingress Engine - Real-time Metrics
           </p>
         </div>
         <div className="flex items-center gap-2">

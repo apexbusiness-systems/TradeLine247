@@ -50,6 +50,15 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
+│               OMNIPORT PLATFORM (External Service)               │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  Zero-Trust Gate ─► Idempotency ─► Risk Classification  │   │
+│  │  DLQ + Circuit Breaker ─► Metrics & Observability       │   │
+│  └─────────────────────────────────────────────────────────┘   │
+└──────────────────────────┬──────────────────────────────────────┘
+                           │ API Connection
+                           ▼
+┌─────────────────────────────────────────────────────────────────┐
 │                    TradeLine 24/7 Platform                       │
 ├─────────────────────────────────────────────────────────────────┤
 │  PRESENTATION LAYER                                              │
@@ -58,14 +67,6 @@
 │  │ React/TS    │    │ Capacitor   │    │ Capacitor   │         │
 │  └──────┬──────┘    └──────┬──────┘    └──────┬──────┘         │
 ├─────────┴──────────────────┴──────────────────┴─────────────────┤
-│  OMNIPORT (Universal Ingress Engine)                             │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │  Zero-Trust Gate ─► Idempotency ─► Risk Classification  │   │
-│  │  (DeviceRegistry)   (FNV-1a)       (GREEN/YELLOW/RED)   │   │
-│  │                          │                               │   │
-│  │  DLQ + Circuit Breaker ◄─┴─► Metrics & Observability    │   │
-│  └─────────────────────────────────────────────────────────┘   │
-├─────────────────────────────────────────────────────────────────┤
 │  ┌─────────────────────────────────────────────────────────┐   │
 │  │                 Vercel Edge Network                     │   │
 │  │     Global CDN • Auto-scaling • Edge Computing         │   │
@@ -125,18 +126,20 @@
 - **Caching Strategy:** Redis-based caching with TTL management
 - **Webhook Support:** Real-time notifications for external systems
 
-### OmniPort Universal Ingress Engine
+### OmniPort Platform Integration
 
-OmniPort is the unified ingress layer that processes all incoming requests from text, voice, webhooks, and API sources with production-grade reliability and security.
+TradeLine 24/7 connects as a **client** to the OmniPort universal ingress platform. OmniPort handles high-throughput event processing, risk classification, and observability as an external service.
 
-#### Core Components
+#### Client SDK Features
 
-| Component | Purpose | Technology |
-|-----------|---------|------------|
-| **Zero-Trust Gate** | Device validation and fingerprinting | DeviceRegistry with trust scoring |
-| **Idempotency Wrapper** | Deduplication at 10K+ req/sec | FNV-1a 32-bit hash |
-| **Semantic Normalizer** | Unified CanonicalEvent format | Source-specific transformations |
-| **Risk Classifier** | 4-lane security assessment | Pattern matching with ReDoS protection |
+| Feature | Purpose | Usage |
+|---------|---------|-------|
+| **getOmniPortMetrics()** | Fetch real-time platform metrics | Dashboard displays, health monitoring |
+| **sendToOmniPort()** | Send events for processing | Voice, text, webhook event submission |
+| **registerDevice()** | Register devices with zero-trust registry | Mobile app and browser device tracking |
+| **subscribeToEvents()** | Real-time event stream | Live dashboard updates |
+
+#### OmniPort Platform Capabilities (External)
 | **Resilient Dispatch** | Fault-tolerant delivery | Circuit breaker + DLQ |
 | **Metrics Collector** | Real-time observability | P95 latency, success rates |
 
