@@ -123,10 +123,13 @@ serve(async (req) => {
 
       console.log(`[Stream] 🚀 Call Started | Trace: ${traceId} | Caller: ${callerNumber} | CallSid: ${callSid}`);
 
-      // --- CRITICAL: ZERO-LATENCY CONTEXT LOOKUP ---
-      // Query database BEFORE AI speaks to inject personalized context
-      let userContext = `Caller Phone: ${callerNumber}. Status: Unknown User.`;
-      let clientName = "there";
+  // Helper: Connect to OpenAI with timeout fallback
+  async function connectToOpenAIWithTimeout(apiKey: string, callSid: string): Promise<WebSocket> {
+    return new Promise((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        console.error(`[${sanitizeForLogging(callSid)}] OpenAI connection timeout after ${OPENAI_TIMEOUT_MS}ms`);
+        reject(new Error('OpenAI connection timeout'));
+      }, OPENAI_TIMEOUT_MS);
 
       try {
         const startLookup = performance.now();
@@ -164,15 +167,49 @@ serve(async (req) => {
             userContext += `\nNo open support tickets.`;
           }
 
-          if (bookings.length) {
-            userContext += `\nRECENT BOOKINGS: ${bookings.map(b => `${b.check_in_date} (${b.status})`).join(", ")}`;
-          }
+        ws.onopen = () => {
+          clearTimeout(timeoutId);
+          console.log(`[${sanitizeForLogging(callSid)}] ✅ Connected to OpenAI Realtime API`);
+          resolve(ws);
+        };
 
-          const duration = performance.now() - startLookup;
-          console.log(`[Stream] ⚡ Context Loaded in ${duration.toFixed(2)}ms | Tickets: ${tickets.length} | Bookings: ${bookings.length}`);
+        ws.onerror = (error) => {
+          clearTimeout(timeoutId);
+          console.error(`[${sanitizeForLogging(callSid)}] OpenAI WebSocket connection error:`, sanitizeForLogging(String(error)));
+          reject(new Error('OpenAI WebSocket connection failed'));
+        };
 
-        } else {
-          console.log(`[Stream] 🆕 New Caller | Trace: ${traceId} | Phone: ${callerNumber}`);
+      } catch (error) {
+        clearTimeout(timeoutId);
+        console.error(`[${sanitizeForLogging(callSid)}] Failed to create OpenAI WebSocket:`, sanitizeForLogging(String(error)));
+        reject(error);
+      }
+    });
+  }
+
+  // Connect to OpenAI Realtime API with timeout handling
+  try {
+    openaiWs = await connectToOpenAIWithTimeout(OPENAI_API_KEY, callSid);
+
+    openaiWs.onopen = () => {
+      openaiConnectTime = Date.now(); // Capture OpenAI connection time
+      console.log(`✅ Connected to OpenAI Realtime API (${openaiConnectTime - (twilioStartTime || 0)}ms from Twilio start)`);
+
+      // Build context injection for conversation state preservation
+      let contextInjection = '';
+      if (Object.keys(conversationState).length > 0) {
+        const contextParts = [];
+        if (conversationState.caller_name) contextParts.push(`caller name: ${conversationState.caller_name}`);
+        if (conversationState.callback_number) contextParts.push(`callback number: ${conversationState.callback_number}`);
+        if (conversationState.email) contextParts.push(`email: ${conversationState.email}`);
+        if (conversationState.job_summary) contextParts.push(`job summary: ${conversationState.job_summary}`);
+        if (conversationState.preferred_datetime) contextParts.push(`preferred time: ${conversationState.preferred_datetime}`);
+        if (conversationState.consent_recording !== undefined) contextParts.push(`recording consent: ${conversationState.consent_recording}`);
+        if (conversationState.consent_sms_opt_in !== undefined) contextParts.push(`SMS consent: ${conversationState.consent_sms_opt_in}`);
+        if (conversationState.call_category) contextParts.push(`call category: ${conversationState.call_category}`);
+
+        if (contextParts.length > 0) {
+          contextInjection = `\n\n[CONVERSATION CONTEXT - DO NOT REPEAT TO USER]\nPreviously captured information: ${contextParts.join(', ')}\nUse this context to provide personalized, non-repetitive responses.`;
         }
       } catch (error) {
         console.error(`[Stream] ⚠️ Context Lookup Failed | Trace: ${traceId} | Error:`, error);
@@ -195,6 +232,247 @@ serve(async (req) => {
             prefix_padding_ms: 300,      // Audio before speech to include
             silence_duration_ms: 400     // Snappy response (lower = faster, but may cut off)
           },
+          tools: tools,
+          tool_choice: "auto",
+        }
+      };
+      openaiWs.send(JSON.stringify(sessionUpdate));
+
+      // 2. Trigger Greeting: Enable "Voice" (Break Deadlock)
+      setTimeout(() => {
+        const initialGreeting = {
+          type: 'response.create',
+          response: {
+            modalities: ['text', 'audio'],
+            instructions: "Say exactly: 'Hello! Thanks for calling TradeLine 24/7. How can I help you secure funding today?'"
+          }
+        };
+        openaiWs.send(JSON.stringify(initialGreeting));
+      }, 100); // 100ms buffer ensures session config applies first
+    };
+
+    openaiWs.onmessage = (event) => {
+      messageCount++; // Increment message counter
+      const data = JSON.parse(event.data);
+      lastActivityTime = Date.now();
+
+      // Handle different event types
+      if (data.type === 'response.audio.delta' && streamSid && twilioSocket.readyState === WebSocket.OPEN) {
+        // Capture first AI audio time
+        if (firstAIAudioTime === null) {
+          firstAIAudioTime = Date.now();
+        }
+        // Forward audio to Twilio
+        twilioSocket.send(JSON.stringify({
+          event: 'media',
+          streamSid: streamSid,
+          media: {
+            payload: data.delta
+          }
+        }));
+      } else if (data.type === 'response.audio_transcript.delta') {
+        transcript += data.delta;
+      } else if (data.type === 'conversation.item.input_audio_buffer.committed') {
+        // Capture user speech end time for first-byte latency calculation
+        userSpeechEndTime = Date.now();
+        // User speech committed - perform safety check (enhanced feature)
+        if (data.item?.transcript && safetyConfig) {
+          const userText = data.item.transcript;
+          userTranscript += userText + ' ';
+
+          // Perform safety check on user input (enforcement-aware)
+          try {
+            const safetyResult = performSafetyCheck(
+              userText,
+              safetyConfig,
+              {
+                duration_seconds: Math.floor((Date.now() - conversationStartTime) / 1000),
+                turn_count: turnCount,
+                sentiment_history: sentimentHistory
+              }
+            );
+
+            // Handle safety actions with fail-closed option
+            if (!safetyResult.safe) {
+              const incidentPayload = {
+                call_sid: callSid,
+                severity: 'high',
+                details: {
+                  reason: safetyResult.reason,
+                  action: safetyResult.action,
+                  confidence: safetyResult.confidence || 0.8,
+                  sanitized_text: sanitizeForLogging(userText)
+                }
+              };
+
+              supabase.from('security_incidents')
+                .insert(incidentPayload)
+                .then(({ error }) => {
+                  if (error) console.error('security_incidents insert error:', error);
+                });
+
+              supabase.from('call_logs')
+                .update({
+                  status: 'terminated_safety',
+                  captured_fields: {
+                    ...capturedFields,
+                    safety_flag: true,
+                    safety_escalation_reason: safetyResult.reason,
+                    safety_confidence: safetyResult.confidence || 0.8,
+                    sentiment_score: safetyResult.sentiment_score
+                  }
+                })
+                .eq('call_sid', callSid)
+                .then(({ error }) => {
+                  if (error) console.error('Safety flag error:', error);
+                });
+
+              if (enforcementMode === 'block') {
+                try {
+                  twilioSocket.close(1000, 'safety_block');
+                  openaiWs?.close(1000, 'safety_block');
+                } catch (err) {
+                  console.error('Failed to close sockets on safety block:', err);
+                }
+                return;
+              } else {
+                console.log(`⚠️ Safety escalation (log mode): ${safetyResult.reason}`);
+              }
+            }
+
+            // Objection handling (low-latency)
+            const objectionType = classifyObjection(userText);
+            if (objectionType !== 'none') {
+              const context = getObjectionContext(objectionType);
+              try {
+                openaiWs.send(JSON.stringify({
+                  type: 'conversation.item.create',
+                  item: {
+                    type: 'message',
+                    role: 'system',
+                    content: [{ type: 'input_text', text: context }]
+                  }
+                }));
+              } catch (err) {
+                console.error('Objection injection error:', err);
+              }
+
+              supabase.from('call_logs')
+                .update({
+                  captured_fields: { ...capturedFields, objection_type: objectionType }
+                })
+                .eq('call_sid', callSid)
+                .then(({ error }) => {
+                  if (error) console.error('Objection log error:', error);
+                });
+            }
+          } catch (error) {
+            // Safety checks should never break the conversation flow
+            console.error('Safety check error (non-fatal):', error);
+          }
+        }
+      } else if (data.type === "response.function_call_arguments.done") {
+        // Handle Function Calling (Routing) - Merged from Main
+        const functionName = data.name;
+        const args = JSON.parse(data.arguments);
+
+        console.log(`Tool call detected: ${sanitizeForLogging(functionName)}`, sanitizeForLogging(JSON.stringify(args)));
+
+        if (functionName === "transfer_to_lisa") {
+          const context = `[HANDOFF FROM ADELINE]\nCaller: ${args.caller_name || 'Unknown'}\nInterest: ${args.specific_interest}\nReason: ${args.call_reason}\nSentiment: ${args.sentiment}`;
+          const newInstructions = `${LISA_PROMPT}\n\n${context}`;
+
+          // Hot Swap to Lisa
+          openaiWs.send(JSON.stringify({
+            type: "session.update",
+            session: {
+              instructions: newInstructions,
+              voice: "alloy", // Lisa's voice
+              tools: [] // Lisa might not need transfer tools, or different ones
+            }
+          }));
+
+          // Force Greeting
+          openaiWs.send(JSON.stringify({
+            type: "response.create",
+            response: {
+              instructions: `Greet the user warmly as Lisa. Mention you understand they are interested in ${args.specific_interest}.`
+            }
+          }));
+
+        } else if (functionName === "transfer_to_christy") {
+          const context = `[HANDOFF FROM ADELINE]\nCaller: ${args.caller_name || 'Unknown'}\nProblem: ${args.problem_description}\nReason: ${args.call_reason}\nUrgency: ${args.urgency}\nEmotion: ${args.caller_emotion}`;
+          const newInstructions = `${CHRISTY_PROMPT}\n\n${context}`;
+
+          // Hot Swap to Christy
+          openaiWs.send(JSON.stringify({
+            type: "session.update",
+            session: {
+              instructions: newInstructions,
+              voice: "nova", // Christy's voice
+              tools: []
+            }
+          }));
+
+          // Force Greeting
+          let urgencyNote = "";
+          if (args.urgency === 'high' || args.caller_emotion === 'angry') {
+            urgencyNote = "Acknowledge their frustration immediately and apologize.";
+          }
+          openaiWs.send(JSON.stringify({
+            type: "response.create",
+            response: {
+              instructions: `Greet the user as Christy from support. ${urgencyNote} Confirm you are ready to help with their issue.`
+            }
+          }));
+        }
+
+      } else if (data.type === 'response.done') {
+        turnCount++;
+        // Extract captured fields from response
+        if (data.response?.output) {
+          try {
+            const responseOutput = JSON.parse(data.response.output);
+            capturedFields = responseOutput;
+
+            // Store captured fields in conversation state for context preservation
+            if (responseOutput.caller_name) conversationState.caller_name = responseOutput.caller_name;
+            if (responseOutput.callback_number) conversationState.callback_number = responseOutput.callback_number;
+            if (responseOutput.email) conversationState.email = responseOutput.email;
+            if (responseOutput.job_summary) conversationState.job_summary = responseOutput.job_summary;
+            if (responseOutput.preferred_datetime) conversationState.preferred_datetime = responseOutput.preferred_datetime;
+            if (responseOutput.consent_recording !== undefined) conversationState.consent_recording = responseOutput.consent_recording;
+            if (responseOutput.consent_sms_opt_in !== undefined) conversationState.consent_sms_opt_in = responseOutput.consent_sms_opt_in;
+            if (responseOutput.call_category) conversationState.call_category = responseOutput.call_category;
+          } catch { }
+        }
+      } else if (data.type === 'error') {
+        console.error('OpenAI error:', sanitizeForLogging(JSON.stringify(data.error)));
+
+        // Fail open: bridge to human
+        if (config?.fail_open !== false) {
+          twilioSocket.send(JSON.stringify({
+            event: 'clear',
+            streamSid: streamSid
+          }));
+        }
+      }
+
+      openaiWs.onerror = (error) => {
+        console.error('OpenAI WebSocket error:', sanitizeForLogging(String(error)));
+      };
+
+      openaiWs.onclose = () => {
+        console.log('OpenAI WebSocket closed');
+        if (silenceCheckInterval) clearInterval(silenceCheckInterval);
+      };
+    };
+
+  } catch (error) {
+    console.error('Failed to connect to OpenAI:', sanitizeForLogging(String(error)));
+    socket.close(1011, 'OpenAI connection failed');
+    return response;
+  }
 
           input_audio_format: "g711_ulaw",
           output_audio_format: "g711_ulaw",
