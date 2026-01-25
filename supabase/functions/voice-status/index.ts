@@ -1,5 +1,6 @@
  
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { validateTwilioRequest } from "../_shared/twilioValidator.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -12,67 +13,22 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const TWILIO_AUTH_TOKEN = Deno.env.get('TWILIO_AUTH_TOKEN');
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
-    if (!TWILIO_AUTH_TOKEN) {
-      throw new Error('Missing TWILIO_AUTH_TOKEN');
-    }
-
-    // Validate Twilio signature for security
-    const twilioSignature = req.headers.get('x-twilio-signature');
-    if (!twilioSignature) {
-      console.warn('Missing Twilio signature - rejecting request');
-      return new Response(JSON.stringify({ error: 'Forbidden' }), { 
-        status: 403,
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.error('Missing Supabase config for voice status');
+      return new Response(JSON.stringify({ error: 'Server config missing' }), { 
+        status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
-    // Parse form data first (needed for signature validation)
+    const supabaseUrlValue = supabaseUrl as string;
+    const supabaseServiceKeyValue = supabaseServiceKey as string;
+
     const url = new URL(req.url);
-
-    const formData = await req.formData();
-    const params: Record<string, string> = {};
-    
-    for (const [key, value] of formData.entries()) {
-      params[key] = value.toString();
-    }
-
-    // Build signature validation string
-    let signatureString = url.origin + url.pathname;
-    const sortedKeys = Object.keys(params).sort();
-    for (const key of sortedKeys) {
-      signatureString += key + params[key];
-    }
-
-    // Compute expected signature
-    const encoder = new TextEncoder();
-    const keyData = encoder.encode(TWILIO_AUTH_TOKEN);
-    const messageData = encoder.encode(signatureString);
-    
-    const cryptoKey = await crypto.subtle.importKey(
-      'raw',
-      keyData,
-      { name: 'HMAC', hash: 'SHA-1' },
-      false,
-      ['sign']
-    );
-    
-    const signatureBuffer = await crypto.subtle.sign('HMAC', cryptoKey, messageData);
-    const expectedSignature = btoa(String.fromCharCode(...new Uint8Array(signatureBuffer)));
-
-    // Compare signatures (constant-time comparison)
-    if (expectedSignature !== twilioSignature) {
-      console.error('Invalid Twilio signature - potential spoofing attempt');
-      return new Response(JSON.stringify({ error: 'Forbidden - Invalid Signature' }), { 
-        status: 403,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
-    }
-
-    console.log('✅ Twilio signature validated successfully');
+    const params = await validateTwilioRequest(req, url.toString());
 
     // Extract parameters (already parsed above)
     const CallSid = params['CallSid'];
@@ -114,7 +70,7 @@ Deno.serve(async (req) => {
     console.log('Call status update:', { CallSid, CallStatus, CallDuration });
 
     // Store in call_lifecycle table for tracking
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const supabase = createClient(supabaseUrlValue, supabaseServiceKeyValue);
     
     const { error: upsertError } = await supabase
       .from('call_lifecycle')
@@ -158,6 +114,9 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
+    if (error instanceof Response) {
+      return error;
+    }
     console.error('Error processing call status:', error);
     return new Response(JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }), {
       status: 500,

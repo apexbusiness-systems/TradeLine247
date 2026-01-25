@@ -39,18 +39,20 @@ Deno.serve(async (req) => {
     // Route based on digit pressed
     if (Digits === '1') {
       // Sales
-      const { error: logError } = await supabase.from('call_logs').insert({
+      const { error: logError } = await supabase.from('call_logs').upsert({
         call_sid: CallSid,
         from_e164: From,
         to_e164: To,
         mode: 'sales',
         status: 'routing',
         consent_given: true
-    });
-    
-    if (logError) {
-      console.error('Log error:', logError);
-    }
+      }, {
+        onConflict: 'call_sid'
+      });
+      
+      if (logError) {
+        console.error('Log error:', logError);
+      }
 
       twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
@@ -63,13 +65,15 @@ Deno.serve(async (req) => {
 
     } else if (Digits === '2') {
       // Support
-      const { error: supportLogError } = await supabase.from('call_logs').insert({
+      const { error: supportLogError } = await supabase.from('call_logs').upsert({
         call_sid: CallSid,
         from_e164: From,
         to_e164: To,
         mode: 'support',
         status: 'routing',
         consent_given: true
+      }, {
+        onConflict: 'call_sid'
       });
       
       if (supportLogError) {
