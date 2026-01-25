@@ -15,9 +15,9 @@ Deno.serve(async (req) => {
   }
 
   try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     const FORWARD_TARGET_E164 = Deno.env.get('BUSINESS_TARGET_E164');
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
     // Hotline configuration - assistant-first mode
     const HOTLINE_DID = Deno.env.get('HOTLINE_DID') || '+15877428885';
@@ -25,19 +25,41 @@ Deno.serve(async (req) => {
     const VOICE_STREAM_SECRET = Deno.env.get('VOICE_STREAM_SECRET') || supabaseServiceKey;
     const HOTLINE_ALERT_WEBHOOK = Deno.env.get('HOTLINE_ALERT_WEBHOOK');
 
-    if (!FORWARD_TARGET_E164) {
-      throw new Error('Missing required environment variables');
+    const missingEnv = [];
+    if (!supabaseUrl) missingEnv.push('SUPABASE_URL');
+    if (!supabaseServiceKey) missingEnv.push('SUPABASE_SERVICE_ROLE_KEY');
+    if (!FORWARD_TARGET_E164) missingEnv.push('BUSINESS_TARGET_E164');
+    if (!VOICE_STREAM_SECRET) missingEnv.push('VOICE_STREAM_SECRET');
+    if (missingEnv.length > 0) {
+      console.error('Voice answer missing env:', missingEnv.join(', '));
+      const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="Polly.Joanna">We are temporarily unable to connect your call. Please try again shortly.</Say>
+  <Hangup/>
+</Response>`;
+      return new Response(twiml, {
+        headers: { ...corsHeaders, 'Content-Type': 'text/xml' },
+        status: 200,
+      });
     }
 
-    if (!VOICE_STREAM_SECRET) {
-      throw new Error('VOICE_STREAM_SECRET must be set for secure stream authentication');
-    }
+    const supabaseUrlValue = supabaseUrl as string;
+    const supabaseServiceKeyValue = supabaseServiceKey as string;
+    const voiceStreamSecret = VOICE_STREAM_SECRET as string;
 
     // CRITICAL: Enforce E.164 format for bridge target
     const e164Regex = /^\+[1-9]\d{1,14}$/;
     if (!e164Regex.test(FORWARD_TARGET_E164)) {
       console.error('CRITICAL: BUSINESS_TARGET_E164 is not in valid E.164 format:', FORWARD_TARGET_E164);
-      throw new Error('Invalid bridge target configuration - must be E.164 format');
+      const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="Polly.Joanna">We are unable to connect this call due to configuration. Please try again later.</Say>
+  <Hangup/>
+</Response>`;
+      return new Response(twiml, {
+        headers: { ...corsHeaders, 'Content-Type': 'text/xml' },
+        status: 200,
+      });
     }
 
     // Validate Twilio signature using shared validator (handles proxy URL reconstruction)
@@ -62,7 +84,7 @@ Deno.serve(async (req) => {
       console.error('Hotline stream fallback triggered:', { CallSid, From });
 
       // Create supabase client for logging
-      const supabase = createClient(supabaseUrl, supabaseServiceKey);
+      const supabase = createClient(supabaseUrlValue, supabaseServiceKeyValue);
 
       // Log the fallback event
       await supabase.from('call_timeline').insert({
@@ -131,7 +153,7 @@ Deno.serve(async (req) => {
 
     // Early consent prompt (strict opt-in: default is no-record)
     if (!hasRecordingParam) {
-      const consentUrl = `${supabaseUrl}/functions/v1/voice-consent`;
+    const consentUrl = `${supabaseUrlValue}/functions/v1/voice-consent`;
       const twimlConsent = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Gather action="${consentUrl}" method="POST" input="dtmf" numDigits="1" timeout="4">
@@ -156,14 +178,14 @@ Deno.serve(async (req) => {
 
     // Helper to create secure stream URL with short-lived HMAC token
     async function makeStreamUrl(callSid: string): Promise<string> {
-      const token = await createStreamToken(VOICE_STREAM_SECRET, callSid, 3 * 60 * 1000); // 3m TTL
-      const base = supabaseUrl.replace('https://', '');
+      const token = await createStreamToken(voiceStreamSecret, callSid, 3 * 60 * 1000); // 3m TTL
+      const base = supabaseUrlValue.replace('https://', '');
       return `wss://${base}/functions/v1/enhanced-voice-stream?callSid=${callSid}&streamToken=${token}`;
     }
 
     console.log('Incoming call:', { CallSid, From, To, AnsweredBy, isHotline });
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const supabase = createClient(supabaseUrlValue, supabaseServiceKeyValue);
     
     // PHASE 3: Add timeline marker - inbound_received
     const now = new Date().toISOString();
@@ -220,8 +242,8 @@ Deno.serve(async (req) => {
     const withinConcurrencyLimit = (activeStreams || 0) < 10;
 
     // Build recording callback URL (PHASE 1A: Fix callback URL to voice-recording-callback)
-    const recordingCallbackUrl = `${supabaseUrl}/functions/v1/voice-recording-callback`;
-    const statusCallbackUrl = `${supabaseUrl}/functions/v1/voice-status-callback`;
+    const recordingCallbackUrl = `${supabaseUrlValue}/functions/v1/voice-recording-callback`;
+    const statusCallbackUrl = `${supabaseUrlValue}/functions/v1/voice-status-callback`;
     const dialRecordAttr = recordingEnabled ? "record-from-answer" : "do-not-record";
 
     // HOTLINE ASSISTANT-ONLY: never dial external numbers, always connect to AI
@@ -230,7 +252,7 @@ Deno.serve(async (req) => {
       twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Say voice="Polly.Joanna">Welcome to the TradeLine demo hotline. Connecting you to our AI receptionist now.</Say>
-  <Connect action="https://${supabaseUrl.replace('https://', '')}/functions/v1/voice-answer?fallback=true&amp;hotline=true">
+  <Connect action="https://${supabaseUrlValue.replace('https://', '')}/functions/v1/voice-answer?fallback=true&amp;hotline=true">
     <Stream url="${streamUrl}" />
   </Connect>
   <Say voice="Polly.Joanna">Thank you for calling. Goodbye.</Say>
@@ -241,7 +263,7 @@ Deno.serve(async (req) => {
       twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Say voice="Polly.Joanna">Admin line active. Connecting you to the AI assistant.</Say>
-  <Connect action="https://${supabaseUrl.replace('https://', '')}/functions/v1/voice-answer?fallback=true">
+  <Connect action="https://${supabaseUrlValue.replace('https://', '')}/functions/v1/voice-answer?fallback=true">
     <Stream url="${streamUrl}" />
   </Connect>
   <Say voice="Polly.Joanna">Goodbye.</Say>
@@ -252,12 +274,12 @@ Deno.serve(async (req) => {
       const streamUrl = await makeStreamUrl(CallSid);
       twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Gather action="https://${supabaseUrl.replace('https://', '')}/functions/v1/voice-action?recording_enabled=${recordingEnabled}" numDigits="1" timeout="1">
+  <Gather action="https://${supabaseUrlValue.replace('https://', '')}/functions/v1/voice-action?recording_enabled=${recordingEnabled}" numDigits="1" timeout="1">
     <Say voice="Polly.Joanna">
       Hi, you've reached TradeLine 24/7 — Your 24/7 AI Receptionist! How can I help? Press 0 to speak with someone directly.
     </Say>
   </Gather>
-  <Connect action="https://${supabaseUrl.replace('https://', '')}/functions/v1/voice-answer?fallback=true">
+  <Connect action="https://${supabaseUrlValue.replace('https://', '')}/functions/v1/voice-answer?fallback=true">
     <Stream url="${streamUrl}" />
   </Connect>
   <Say voice="Polly.Joanna">Connecting you to an agent now.</Say>
