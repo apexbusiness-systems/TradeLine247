@@ -158,13 +158,19 @@ export function performSafetyCheck(
 
 // Sanitize text for logging (remove PII and prevent log injection)
 export function sanitizeForLogging(text: string): string {
+  // Clamp input length to avoid regex backtracking/DoS on extremely long payloads
+  const MAX_LENGTH = 5000;
+  const truncated = text.length > MAX_LENGTH ? text.slice(0, MAX_LENGTH) : text;
+
   // SECURITY: Remove newlines and carriage returns to prevent log injection
   // This prevents malicious users from forging log entries with \n or \r characters
-  let sanitized = text.replaceAll(/[\n\r]/g, " ");
+  let sanitized = truncated.replaceAll(/[\n\r]+/g, " ");
   // Remove phone numbers (E.164 format)
   sanitized = sanitized.replaceAll(/\+\d{10,15}/g, '[PHONE]');
   // Remove email addresses
-  sanitized = sanitized.replaceAll(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*\.[a-zA-Z]{2,}/g, '[EMAIL]');
+  // Bounded patterns to prevent super-linear backtracking
+  const emailPattern = /\b[a-zA-Z0-9._%+-]{1,64}@[a-zA-Z0-9-]{1,63}(?:\.[a-zA-Z0-9-]{2,63}){1,4}\b/g;
+  sanitized = sanitized.replaceAll(emailPattern, '[EMAIL]');
   // Remove credit card patterns (basic)
   sanitized = sanitized.replaceAll(/\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/g, '[CARD]');
   return sanitized;
