@@ -160,7 +160,7 @@
     "@vitejs/plugin-react": "^5.1.2",
     "@vitejs/plugin-react-swc": "^4.2.2",
     "autoprefixer": "^10.4.22",
-    "axe-core": "^4.11.0",
+    "axe-core": "^4.11.1",
     "compression": "^1.8.1",
     "cors": "^2.8.5",
     "cross-env": "^10.1.0",
