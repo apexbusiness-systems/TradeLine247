@@ -20,23 +20,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useUserPreferencesStore } from '@/stores/userPreferencesStore';
+import { adminNavFeatures, marketingNavFeatures } from '@/features/registry';
 // CSS import removed in main branch - keeping defensive approach
-
-// Navigation configuration
-const MARKETING_NAV = [
-  { name: 'Features', href: paths.features },
-  { name: 'Pricing', href: `${paths.pricing}#no-monthly` },
-  { name: 'Compare', href: paths.compare },
-  { name: 'Security', href: paths.security },
-  { name: 'FAQ', href: paths.faq },
-  { name: 'Contact', href: paths.contact },
-] as const;
-
-const ADMIN_NAV = [
-  { name: 'Calls', href: paths.calls, icon: Phone },
-  { name: 'Phone Apps', href: paths.phoneApps, icon: Smartphone },
-  { name: 'Settings', href: paths.voiceSettings, icon: Settings },
-] as const;
 
 export const Header: React.FC = () => {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -59,6 +44,8 @@ export const Header: React.FC = () => {
   const mobileMenuId = 'mobile-menu';
   const isUserAdmin = typeof isAdmin === 'function' ? isAdmin() : false;
   const isMarketingHome = location?.pathname === paths.home;
+  const adminShortcutIds = new Set(['calls', 'phone-apps', 'voice-settings']);
+  const adminNavItems = adminNavFeatures.filter((feature) => adminShortcutIds.has(feature.id));
 
   useEffect(() => {
     setIsUserMenuOpen(false);
@@ -221,25 +208,39 @@ export const Header: React.FC = () => {
             >
               <NavigationMenu>
                 <NavigationMenuList className="gap-1">
-                  {MARKETING_NAV.map((item) => (
-                    <NavigationMenuItem key={item.name}>
-                      <NavigationMenuLink asChild>
-                        <Link
-                          to={item.href}
-                          className={cn(
-                            'inline-flex h-10 w-max items-center justify-center rounded-md px-4 py-2',
-                            'text-sm font-medium text-muted-foreground transition-all duration-300',
-                            'hover:bg-accent hover:text-foreground focus:bg-accent focus:text-foreground',
-                            'focus:outline-none disabled:pointer-events-none disabled:opacity-50',
-                            'data-[active]:bg-accent/50 data-[state=open]:bg-accent/50 hover-scale'
-                          )}
-                          aria-current={isActivePath(item.href) ? 'page' : undefined}
-                        >
-                          {item.name}
-                        </Link>
-                      </NavigationMenuLink>
-                    </NavigationMenuItem>
-                  ))}
+                  {marketingNavFeatures.map((feature) => {
+                    const href = feature.anchor ? `${feature.path}#${feature.anchor}` : feature.path;
+                    const isLocked = feature.status !== 'ready';
+                    return (
+                      <NavigationMenuItem key={feature.id}>
+                        <NavigationMenuLink asChild>
+                          <Link
+                            to={href}
+                            aria-disabled={isLocked}
+                            aria-current={isActivePath(feature.path) ? 'page' : undefined}
+                            title={isLocked ? feature.gateReason ?? 'Coming soon' : undefined}
+                            className={cn(
+                              'inline-flex h-10 w-max items-center justify-center rounded-md px-4 py-2',
+                              'text-sm font-medium text-muted-foreground transition-all duration-300',
+                              'hover:bg-accent hover:text-foreground focus:bg-accent focus:text-foreground',
+                              'focus:outline-none disabled:pointer-events-none disabled:opacity-50',
+                              'data-[active]:bg-accent/50 data-[state=open]:bg-accent/50 hover-scale',
+                              isLocked ? 'cursor-not-allowed opacity-60' : ''
+                            )}
+                            onClick={(event) => {
+                              if (isLocked) {
+                                event.preventDefault();
+                                return;
+                              }
+                              handleNavigation(feature.path, feature.title);
+                            }}
+                          >
+                            {feature.title}
+                          </Link>
+                        </NavigationMenuLink>
+                      </NavigationMenuItem>
+                    );
+                  })}
                 </NavigationMenuList>
               </NavigationMenu>
             </nav>
@@ -254,27 +255,28 @@ export const Header: React.FC = () => {
             >
               <NavigationMenu>
                 <NavigationMenuList className="gap-1">
-                  {ADMIN_NAV.map((item) => {
-                    const Icon = item.icon;
+                  {adminNavItems.map((feature) => {
+                    const Icon = feature.id === 'calls' ? Phone : feature.id === 'phone-apps' ? Smartphone : Settings;
                     return (
-                      <NavigationMenuItem key={item.name}>
+                      <NavigationMenuItem key={feature.id}>
                         <NavigationMenuLink asChild>
                           <Link
-                            to={item.href}
+                            to={feature.path}
                             onClick={(e) => {
                               e.preventDefault();
-                              handleNavigation(item.href, item.name);
+                              handleNavigation(feature.path, feature.title);
                             }}
-                      className={cn(
-                          'inline-flex h-10 w-max items-center justify-center rounded-md px-4 py-2',
-                          'text-sm font-semibold text-foreground transition-all duration-300',
-                          'hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground',
-                          'focus:outline-none disabled:pointer-events-none disabled:opacity-50',
-                          'data-[active]:bg-accent data-[state=open]:bg-accent hover-scale'
-                        )}
-                            aria-label={`Navigate to ${item.name}`}
+                            className={cn(
+                              'inline-flex h-10 w-max items-center justify-center rounded-md px-4 py-2 gap-2',
+                              'text-sm font-semibold text-foreground transition-all duration-300',
+                              'hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground',
+                              'focus:outline-none disabled:pointer-events-none disabled:opacity-50',
+                              'data-[active]:bg-accent data-[state=open]:bg-accent hover-scale'
+                            )}
+                            aria-label={`Navigate to ${feature.title}`}
                           >
-                            {item.name}
+                            <Icon className="h-4 w-4" />
+                            {feature.title}
                           </Link>
                         </NavigationMenuLink>
                       </NavigationMenuItem>

@@ -50,6 +50,7 @@
     "test:a11y": "playwright test scripts/a11y-contrast.spec.ts",
     "test:security": "playwright test tests/e2e/security-validation.spec.ts",
     "test:twilio-webhooks": "node scripts/test-twilio-webhooks.mjs",
+    "audit:features": "node scripts/audit-features.mjs",
     "// onboarding testing": "────────────────────────────────────",
     "test:onboarding": "node testing/onboarding/test-onboarding-flow.ts",
     "test:onboarding:manual": "chmod +x testing/onboarding/test-onboarding-manual.sh && ./testing/onboarding/test-onboarding-manual.sh",

@@ -52,3 +52,15 @@ class IntersectionObserverMock implements IntersectionObserver {
 }
 
 window.IntersectionObserver = IntersectionObserverMock as unknown as typeof IntersectionObserver;
+
+// Provide a lightweight fetch mock so background logging/network calls resolve instantly during tests
+const fetchMock = vi.fn(async () => ({
+  ok: true,
+  status: 200,
+  json: async () => ({}),
+  text: async () => '',
+  headers: {
+    get: () => null,
+  },
+}));
+vi.stubGlobal('fetch', fetchMock);

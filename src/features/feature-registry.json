@@ -1,0 +1,343 @@
+[
+  {
+    "id": "landing",
+    "title": "Landing Experience",
+    "path": "/",
+    "navGroup": "marketing",
+    "status": "ready",
+    "mode": "wired",
+    "requiresAuth": false,
+    "description": "Marketing hero + lead capture funnel."
+  },
+  {
+    "id": "features",
+    "title": "Features",
+    "path": "/features",
+    "navGroup": "marketing",
+    "status": "ready",
+    "mode": "wired",
+    "requiresAuth": false,
+    "description": "Detailed feature grid for TradeLine 24/7."
+  },
+  {
+    "id": "pricing",
+    "title": "Pricing",
+    "path": "/pricing",
+    "navGroup": "marketing",
+    "anchor": "no-monthly",
+    "status": "ready",
+    "mode": "wired",
+    "requiresAuth": false,
+    "description": "Pricing tiers and calls / month calculator."
+  },
+  {
+    "id": "compare",
+    "title": "Compare",
+    "path": "/compare",
+    "navGroup": "marketing",
+    "status": "ready",
+    "mode": "wired",
+    "requiresAuth": false,
+    "description": "Compare TradeLine with competitors."
+  },
+  {
+    "id": "security",
+    "title": "Security",
+    "path": "/security",
+    "navGroup": "marketing",
+    "status": "ready",
+    "mode": "wired",
+    "requiresAuth": false,
+    "description": "Security posture, compliance, and audits."
+  },
+  {
+    "id": "faq",
+    "title": "FAQ",
+    "path": "/faq",
+    "navGroup": "marketing",
+    "status": "ready",
+    "mode": "wired",
+    "requiresAuth": false,
+    "description": "Answers to common questions."
+  },
+  {
+    "id": "contact",
+    "title": "Contact",
+    "path": "/contact",
+    "navGroup": "marketing",
+    "status": "ready",
+    "mode": "wired",
+    "requiresAuth": false,
+    "description": "Contact options and CTA."
+  },
+  {
+    "id": "privacy",
+    "title": "Privacy",
+    "path": "/privacy",
+    "navGroup": "marketing",
+    "status": "ready",
+    "mode": "wired",
+    "requiresAuth": false,
+    "description": "Privacy policy and compliance."
+  },
+  {
+    "id": "preview-health",
+    "title": "Preview Health",
+    "path": "/preview-health",
+    "navGroup": "marketing",
+    "status": "ready",
+    "mode": "wired",
+    "requiresAuth": false,
+    "description": "Demo health-check results."
+  },
+  {
+    "id": "login",
+    "title": "Login",
+    "path": "/login",
+    "navGroup": "utility",
+    "status": "ready",
+    "mode": "wired",
+    "requiresAuth": false,
+    "description": "Public login gateway."
+  },
+  {
+    "id": "auth",
+    "title": "Authentication",
+    "path": "/auth",
+    "navGroup": "utility",
+    "status": "ready",
+    "mode": "wired",
+    "requiresAuth": false,
+    "description": "Full auth experience for account holders."
+  },
+  {
+    "id": "auth-landing",
+    "title": "Auth Landing",
+    "path": "/auth-landing",
+    "navGroup": "utility",
+    "status": "ready",
+    "mode": "wired",
+    "requiresAuth": false,
+    "description": "Trial capture form for auth flows."
+  },
+  {
+    "id": "dashboard",
+    "title": "Client Dashboard",
+    "path": "/dashboard",
+    "navGroup": "admin",
+    "status": "ready",
+    "mode": "wired",
+    "requiresAuth": true,
+    "description": "Post-login dashboard for agents."
+  },
+  {
+    "id": "calls",
+    "title": "Call Center",
+    "path": "/calls",
+    "navGroup": "admin",
+    "status": "ready",
+    "mode": "wired",
+    "requiresAuth": true,
+    "description": "Realtime call control console."
+  },
+  {
+    "id": "call-center",
+    "title": "Legacy Call Center",
+    "path": "/call-center",
+    "navGroup": "admin",
+    "status": "ready",
+    "mode": "wired",
+    "requiresAuth": true,
+    "description": "Legacy route that redirects to /calls."
+  },
+  {
+    "id": "call-logs",
+    "title": "Call Logs",
+    "path": "/call-logs",
+    "navGroup": "admin",
+    "status": "ready",
+    "mode": "wired",
+    "requiresAuth": true,
+    "description": "Historic call transcripts and recordings."
+  },
+  {
+    "id": "numbers-new",
+    "title": "Add Number",
+    "path": "/numbers/new",
+    "navGroup": "admin",
+    "status": "ready",
+    "mode": "wired",
+    "requiresAuth": true,
+    "description": "Bring-your-own-number onboarding flow."
+  },
+  {
+    "id": "numbers",
+    "title": "Numbers Legacy",
+    "path": "/numbers",
+    "navGroup": "admin",
+    "status": "ready",
+    "mode": "wired",
+    "requiresAuth": true,
+    "description": "Legacy number management landing."
+  },
+  {
+    "id": "team-invite",
+    "title": "Team Invite",
+    "path": "/team/invite",
+    "navGroup": "admin",
+    "status": "ready",
+    "mode": "wired",
+    "requiresAuth": true,
+    "description": "Invite teammates to the dashboard."
+  },
+  {
+    "id": "campaign-manager",
+    "title": "Campaign Manager",
+    "path": "/campaign-manager",
+    "navGroup": "admin",
+    "status": "ready",
+    "mode": "wired",
+    "requiresAuth": true,
+    "description": "Orchestrate call/messaging campaigns."
+  },
+  {
+    "id": "integrations",
+    "title": "Integrations",
+    "path": "/integrations",
+    "navGroup": "admin",
+    "status": "ready",
+    "mode": "wired",
+    "requiresAuth": true,
+    "description": "Overview of available integrations."
+  },
+  {
+    "id": "integrations-crm",
+    "title": "CRM Integrations",
+    "path": "/dashboard/integrations/crm",
+    "navGroup": "admin",
+    "status": "ready",
+    "mode": "wired",
+    "requiresAuth": true,
+    "description": "CRM sync configuration."
+  },
+  {
+    "id": "integrations-messaging",
+    "title": "Messaging Integrations",
+    "path": "/dashboard/integrations/messaging",
+    "navGroup": "admin",
+    "status": "ready",
+    "mode": "wired",
+    "requiresAuth": true,
+    "description": "Messaging platform hooks."
+  },
+  {
+    "id": "integrations-phone",
+    "title": "Phone Integrations",
+    "path": "/dashboard/integrations/phone",
+    "navGroup": "admin",
+    "status": "ready",
+    "mode": "wired",
+    "requiresAuth": true,
+    "description": "Phone routing configurations."
+  },
+  {
+    "id": "integrations-email",
+    "title": "Email Integrations",
+    "path": "/dashboard/integrations/email",
+    "navGroup": "admin",
+    "status": "ready",
+    "mode": "wired",
+    "requiresAuth": true,
+    "description": "Email workflow connectors."
+  },
+  {
+    "id": "integrations-automation",
+    "title": "Automation Integrations",
+    "path": "/dashboard/integrations/automation",
+    "navGroup": "admin",
+    "status": "ready",
+    "mode": "wired",
+    "requiresAuth": true,
+    "description": "Automation/Webhook connectors."
+  },
+  {
+    "id": "integrations-mobile",
+    "title": "Mobile Integrations",
+    "path": "/dashboard/integrations/mobile",
+    "navGroup": "admin",
+    "status": "ready",
+    "mode": "wired",
+    "requiresAuth": true,
+    "description": "Mobile app telemetry connectors."
+  },
+  {
+    "id": "phone-apps",
+    "title": "Phone Apps",
+    "path": "/phone-apps",
+    "navGroup": "admin",
+    "status": "ready",
+    "mode": "wired",
+    "requiresAuth": true,
+    "description": "On-device phone apps and deep links."
+  },
+  {
+    "id": "forwarding",
+    "title": "Forwarding Wizard",
+    "path": "/ops/forwarding",
+    "navGroup": "ops",
+    "status": "ready",
+    "mode": "wired",
+    "requiresAuth": true,
+    "description": "Enterprise forwarding setup guide."
+  },
+  {
+    "id": "voice-settings",
+    "title": "Voice Settings",
+    "path": "/ops/voice",
+    "navGroup": "ops",
+    "status": "ready",
+    "mode": "wired",
+    "requiresAuth": true,
+    "description": "Call handling and voice routing controls."
+  },
+  {
+    "id": "messaging-health",
+    "title": "Messaging Health",
+    "path": "/ops/messaging-health",
+    "navGroup": "ops",
+    "status": "ready",
+    "mode": "wired",
+    "requiresAuth": true,
+    "description": "Messaging reliability dashboards."
+  },
+  {
+    "id": "voice-health",
+    "title": "Voice Health",
+    "path": "/ops/voice-health",
+    "navGroup": "ops",
+    "status": "ready",
+    "mode": "wired",
+    "requiresAuth": true,
+    "description": "Voice call quality metrics."
+  },
+  {
+    "id": "twilio-evidence",
+    "title": "Twilio Evidence",
+    "path": "/ops/twilio-evidence",
+    "navGroup": "ops",
+    "status": "ready",
+    "mode": "wired",
+    "requiresAuth": true,
+    "description": "Evidence exports for call quality and compliance."
+  },
+  {
+    "id": "not-found",
+    "title": "Not Found",
+    "path": "*",
+    "navGroup": "utility",
+    "status": "ready",
+    "mode": "wired",
+    "requiresAuth": false,
+    "description": "Catch-all fallback route."
+  }
+]
