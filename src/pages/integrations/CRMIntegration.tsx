@@ -5,38 +5,10 @@ import { IntegrationPageLayout } from '@/components/integrations/IntegrationPage
 import { useIntegrationConnect } from '@/components/integrations/useIntegrationConnect';
 
 const crmProviders = [
-  {
-    id: 'salesforce',
-    name: 'Salesforce',
-    description: "World's #1 CRM platform",
-    logo: '🌩️',
-    status: 'available' as const,
-    features: ['Lead Management', 'Contact Sync', 'Opportunity Tracking', 'Custom Fields'],
-  },
-  {
-    id: 'hubspot',
-    name: 'HubSpot',
-    description: 'Inbound marketing and sales platform',
-    logo: '🧡',
-    status: 'available' as const,
-    features: ['Contact Management', 'Deal Pipeline', 'Email Tracking', 'Analytics'],
-  },
-  {
-    id: 'pipedrive',
-    name: 'Pipedrive',
-    description: 'Sales-focused CRM for growing teams',
-    logo: '🔵',
-    status: 'available' as const,
-    features: ['Pipeline Management', 'Activity Tracking', 'Email Integration', 'Reports'],
-  },
-  {
-    id: 'zoho',
-    name: 'Zoho CRM',
-    description: 'Complete business suite CRM',
-    logo: '📊',
-    status: 'available' as const,
-    features: ['Lead Scoring', 'Workflow Automation', 'Social CRM', 'Mobile Access'],
-  },
+  { id: 'salesforce', name: 'Salesforce', description: "World's #1 CRM platform", logo: '🌩️', status: 'available' as const, features: ['Lead Management', 'Contact Sync', 'Opportunity Tracking', 'Custom Fields'] },
+  { id: 'hubspot', name: 'HubSpot', description: 'Inbound marketing and sales platform', logo: '🧡', status: 'available' as const, features: ['Contact Management', 'Deal Pipeline', 'Email Tracking', 'Analytics'] },
+  { id: 'pipedrive', name: 'Pipedrive', description: 'Sales-focused CRM for growing teams', logo: '🔵', status: 'available' as const, features: ['Pipeline Management', 'Activity Tracking', 'Email Integration', 'Reports'] },
+  { id: 'zoho', name: 'Zoho CRM', description: 'Complete business suite CRM', logo: '📊', status: 'available' as const, features: ['Lead Scoring', 'Workflow Automation', 'Social CRM', 'Mobile Access'] },
 ];
 
 const CRMIntegration = () => {

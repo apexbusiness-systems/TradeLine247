@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Mail, Settings, Smartphone } from 'lucide-react';
 import { SettingsSection, ProviderGrid, FormSelectRow, FormField } from '@/components/integrations/IntegrationCard';
@@ -7,47 +6,13 @@ import { IntegrationPageLayout } from '@/components/integrations/IntegrationPage
 import { useIntegrationConnect } from '@/components/integrations/useIntegrationConnect';
 import type { IntegrationProvider } from '@/components/integrations/IntegrationCard';
 
-interface EmailProvider extends IntegrationProvider {
-  platform: string;
-}
+interface EmailProvider extends IntegrationProvider { platform: string }
 
 const emailProviders: EmailProvider[] = [
-  {
-    id: 'gmail',
-    name: 'Gmail',
-    description: "Google's email service",
-    logo: '📮',
-    status: 'available',
-    features: ['Auto-compose emails', 'Template management', 'Contact sync', 'Calendar integration'],
-    platform: 'Web/Mobile',
-  },
-  {
-    id: 'outlook',
-    name: 'Microsoft Outlook',
-    description: "Microsoft's email and calendar service",
-    logo: '📧',
-    status: 'available',
-    features: ['Exchange integration', 'Calendar sync', 'Contact management', 'Teams integration'],
-    platform: 'Web/Mobile',
-  },
-  {
-    id: 'apple-mail',
-    name: 'Apple Mail',
-    description: 'Native iOS and macOS email client',
-    logo: '✉️',
-    status: 'available',
-    features: ['Native iOS integration', 'iCloud sync', 'Handoff support', 'VIP lists'],
-    platform: 'iOS/macOS',
-  },
-  {
-    id: 'thunderbird',
-    name: 'Mozilla Thunderbird',
-    description: 'Open-source email client',
-    logo: '🦅',
-    status: 'available',
-    features: ['Add-on support', 'Privacy focused', 'Multi-account', 'Calendar integration'],
-    platform: 'Desktop',
-  },
+  { id: 'gmail', name: 'Gmail', description: "Google's email service", logo: '📮', status: 'available', platform: 'Web/Mobile', features: ['Auto-compose emails', 'Template management', 'Contact sync', 'Calendar integration'] },
+  { id: 'outlook', name: 'Microsoft Outlook', description: "Microsoft's email and calendar service", logo: '📧', status: 'available', platform: 'Web/Mobile', features: ['Exchange integration', 'Calendar sync', 'Contact management', 'Teams integration'] },
+  { id: 'apple-mail', name: 'Apple Mail', description: 'Native iOS and macOS email client', logo: '✉️', status: 'available', platform: 'iOS/macOS', features: ['Native iOS integration', 'iCloud sync', 'Handoff support', 'VIP lists'] },
+  { id: 'thunderbird', name: 'Mozilla Thunderbird', description: 'Open-source email client', logo: '🦅', status: 'available', platform: 'Desktop', features: ['Add-on support', 'Privacy focused', 'Multi-account', 'Calendar integration'] },
 ];
 
 const EmailIntegration = () => {
@@ -101,15 +66,14 @@ TradeLine 24/7 Team`);
           defaultValue="Thank you for calling TradeLine 24/7 - Follow-up"
         />
 
-        <div className="space-y-2">
-          <Label htmlFor="email-template">Email Template</Label>
+        <FormField id="email-template" label="Email Template">
           <Textarea
             id="email-template"
             className="min-h-[200px] font-mono text-sm"
             value={emailTemplate}
             onChange={(e) => setEmailTemplate(e.target.value)}
           />
-          <div className="text-xs text-muted-foreground">
+          <div className="text-xs text-muted-foreground mt-2">
             <p className="mb-1">Available variables:</p>
             <div className="grid grid-cols-2 gap-2">
               <span>• {'{customer_name}'}</span>
@@ -120,7 +84,7 @@ TradeLine 24/7 Team`);
               <span>• {'{call_date}'}</span>
             </div>
           </div>
-        </div>
+        </FormField>
 
         <FormSelectRow
           selects={[

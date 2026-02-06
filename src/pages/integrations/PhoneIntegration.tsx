@@ -10,67 +10,18 @@ import { IntegrationPageLayout } from '@/components/integrations/IntegrationPage
 import { useIntegrationConnect } from '@/components/integrations/useIntegrationConnect';
 import type { IntegrationProvider } from '@/components/integrations/IntegrationCard';
 
-interface PhoneProvider extends IntegrationProvider {
-  platform: string;
-  color: string;
-}
+interface PhoneProvider extends IntegrationProvider { platform: string; color: string }
 
 const phoneIntegrations: PhoneProvider[] = [
-  {
-    id: 'ios-phone',
-    name: 'iOS Phone App',
-    description: 'Native iPhone calling integration',
-    logo: '📱',
-    status: 'available',
-    platform: 'iOS',
-    features: ['Call forwarding', 'Voicemail transcription', 'Contact sync', 'Call history'],
-    color: 'bg-blue-500/10 text-info border-info',
-  },
-  {
-    id: 'android-phone',
-    name: 'Android Phone',
-    description: 'Native Android calling integration',
-    logo: '🤖',
-    status: 'available',
-    platform: 'Android',
-    features: ['Call screening', 'Smart replies', 'Contact integration', 'Call recording'],
-    color: 'bg-[hsl(142,85%,95%)] text-[hsl(142,85%,25%)] border-[hsl(142,85%,70%)]',
-  },
-  {
-    id: 'imessage',
-    name: 'iMessage',
-    description: "Apple's messaging service",
-    logo: '💙',
-    status: 'available',
-    platform: 'iOS',
-    features: ['Auto-reply', 'Business chat', 'Rich messages', 'Read receipts'],
-    color: 'bg-blue-500/10 text-info border-info',
-  },
-  {
-    id: 'android-messages',
-    name: 'Android Messages',
-    description: "Google's messaging app",
-    logo: '💬',
-    status: 'available',
-    platform: 'Android',
-    features: ['RCS support', 'Smart compose', 'Spam detection', 'Web sync'],
-    color: 'bg-[hsl(142,85%,95%)] text-[hsl(142,85%,25%)] border-[hsl(142,85%,70%)]',
-  },
+  { id: 'ios-phone', name: 'iOS Phone App', description: 'Native iPhone calling integration', logo: '📱', status: 'available', platform: 'iOS', color: 'bg-blue-500/10 text-info border-info', features: ['Call forwarding', 'Voicemail transcription', 'Contact sync', 'Call history'] },
+  { id: 'android-phone', name: 'Android Phone', description: 'Native Android calling integration', logo: '🤖', status: 'available', platform: 'Android', color: 'bg-[hsl(142,85%,95%)] text-[hsl(142,85%,25%)] border-[hsl(142,85%,70%)]', features: ['Call screening', 'Smart replies', 'Contact integration', 'Call recording'] },
+  { id: 'imessage', name: 'iMessage', description: "Apple's messaging service", logo: '💙', status: 'available', platform: 'iOS', color: 'bg-blue-500/10 text-info border-info', features: ['Auto-reply', 'Business chat', 'Rich messages', 'Read receipts'] },
+  { id: 'android-messages', name: 'Android Messages', description: "Google's messaging app", logo: '💬', status: 'available', platform: 'Android', color: 'bg-[hsl(142,85%,95%)] text-[hsl(142,85%,25%)] border-[hsl(142,85%,70%)]', features: ['RCS support', 'Smart compose', 'Spam detection', 'Web sync'] },
 ];
 
 const smsProviders = [
-  {
-    id: 'twilio',
-    name: 'Twilio',
-    description: 'Cloud communications platform',
-    features: ['Global SMS', 'Voice calls', 'WhatsApp API', 'Programmable messaging'],
-  },
-  {
-    id: 'vonage',
-    name: 'Vonage',
-    description: 'Business communications API',
-    features: ['SMS API', 'Voice API', 'Verify API', 'Number insight'],
-  },
+  { id: 'twilio', name: 'Twilio', description: 'Cloud communications platform', features: ['Global SMS', 'Voice calls', 'WhatsApp API', 'Programmable messaging'] },
+  { id: 'vonage', name: 'Vonage', description: 'Business communications API', features: ['SMS API', 'Voice API', 'Verify API', 'Number insight'] },
 ];
 
 const PhoneIntegration = () => {

@@ -10,91 +10,20 @@ import { IntegrationPageLayout } from '@/components/integrations/IntegrationPage
 import { useIntegrationConnect } from '@/components/integrations/useIntegrationConnect';
 import type { IntegrationProvider } from '@/components/integrations/IntegrationCard';
 
-interface AutomationProvider extends IntegrationProvider {
-  pricing: string;
-  color: string;
-}
+interface AutomationProvider extends IntegrationProvider { pricing: string; color: string }
 
 const automationProviders: AutomationProvider[] = [
-  {
-    id: 'zapier',
-    name: 'Zapier',
-    description: 'Connect 6,000+ apps with automated workflows',
-    logo: '⚡',
-    status: 'available',
-    features: ['Trigger workflows', 'Multi-step zaps', 'Conditional logic', 'Error handling'],
-    pricing: 'Free + Premium',
-    color: 'bg-orange-500/10 text-brand-primary border-brand-primary',
-  },
-  {
-    id: 'ifttt',
-    name: 'IFTTT',
-    description: 'If This Then That - Simple automation',
-    logo: '🔗',
-    status: 'available',
-    features: ['Simple triggers', 'Applet creation', 'Location-based', 'IoT integration'],
-    pricing: 'Free + Pro',
-    color: 'bg-blue-500/10 text-info border-info',
-  },
-  {
-    id: 'power-automate',
-    name: 'Microsoft Power Automate',
-    description: 'Enterprise automation for Microsoft ecosystem',
-    logo: '🔄',
-    status: 'available',
-    features: ['Microsoft 365', 'AI Builder', 'Desktop flows', 'Approval workflows'],
-    pricing: 'Subscription',
-    color: 'bg-indigo-500/10 text-info border-indigo-500/20',
-  },
-  {
-    id: 'make',
-    name: 'Make (formerly Integromat)',
-    description: 'Visual automation platform',
-    logo: '🎯',
-    status: 'coming-soon',
-    features: ['Visual builder', 'Complex scenarios', 'Data transformation', 'Real-time sync'],
-    pricing: 'Free + Premium',
-    color: 'bg-purple-500/10 text-neutral border-neutral',
-  },
+  { id: 'zapier', name: 'Zapier', description: 'Connect 6,000+ apps with automated workflows', logo: '⚡', status: 'available', pricing: 'Free + Premium', color: 'bg-orange-500/10 text-brand-primary border-brand-primary', features: ['Trigger workflows', 'Multi-step zaps', 'Conditional logic', 'Error handling'] },
+  { id: 'ifttt', name: 'IFTTT', description: 'If This Then That - Simple automation', logo: '🔗', status: 'available', pricing: 'Free + Pro', color: 'bg-blue-500/10 text-info border-info', features: ['Simple triggers', 'Applet creation', 'Location-based', 'IoT integration'] },
+  { id: 'power-automate', name: 'Microsoft Power Automate', description: 'Enterprise automation for Microsoft ecosystem', logo: '🔄', status: 'available', pricing: 'Subscription', color: 'bg-indigo-500/10 text-info border-indigo-500/20', features: ['Microsoft 365', 'AI Builder', 'Desktop flows', 'Approval workflows'] },
+  { id: 'make', name: 'Make (formerly Integromat)', description: 'Visual automation platform', logo: '🎯', status: 'coming-soon', pricing: 'Free + Premium', color: 'bg-purple-500/10 text-neutral border-neutral', features: ['Visual builder', 'Complex scenarios', 'Data transformation', 'Real-time sync'] },
 ];
 
 const automationTemplates = [
-  {
-    id: 'crm-lead',
-    title: 'CRM Lead Creation',
-    description: 'Automatically create leads in your CRM when calls are completed',
-    trigger: 'Call Completed',
-    action: 'Create CRM Lead',
-    apps: ['Salesforce', 'HubSpot', 'Pipedrive'],
-    difficulty: 'Easy',
-  },
-  {
-    id: 'email-followup',
-    title: 'Email Follow-up',
-    description: 'Send follow-up emails to callers based on call outcome',
-    trigger: 'Call Tagged',
-    action: 'Send Email',
-    apps: ['Gmail', 'Outlook', 'SendGrid'],
-    difficulty: 'Easy',
-  },
-  {
-    id: 'calendar-booking',
-    title: 'Calendar Booking',
-    description: 'Schedule appointments in calendar when requested during calls',
-    trigger: 'Appointment Requested',
-    action: 'Create Calendar Event',
-    apps: ['Google Calendar', 'Outlook Calendar', 'Calendly'],
-    difficulty: 'Medium',
-  },
-  {
-    id: 'slack-notification',
-    title: 'Team Notifications',
-    description: 'Notify team members in Slack for urgent or high-priority calls',
-    trigger: 'High Priority Call',
-    action: 'Send Slack Message',
-    apps: ['Slack', 'Microsoft Teams', 'Discord'],
-    difficulty: 'Easy',
-  },
+  { id: 'crm-lead', title: 'CRM Lead Creation', description: 'Automatically create leads in your CRM when calls are completed', trigger: 'Call Completed', action: 'Create CRM Lead', apps: ['Salesforce', 'HubSpot', 'Pipedrive'], difficulty: 'Easy' },
+  { id: 'email-followup', title: 'Email Follow-up', description: 'Send follow-up emails to callers based on call outcome', trigger: 'Call Tagged', action: 'Send Email', apps: ['Gmail', 'Outlook', 'SendGrid'], difficulty: 'Easy' },
+  { id: 'calendar-booking', title: 'Calendar Booking', description: 'Schedule appointments in calendar when requested during calls', trigger: 'Appointment Requested', action: 'Create Calendar Event', apps: ['Google Calendar', 'Outlook Calendar', 'Calendly'], difficulty: 'Medium' },
+  { id: 'slack-notification', title: 'Team Notifications', description: 'Notify team members in Slack for urgent or high-priority calls', trigger: 'High Priority Call', action: 'Send Slack Message', apps: ['Slack', 'Microsoft Teams', 'Discord'], difficulty: 'Easy' },
 ];
 
 const AutomationIntegration = () => {
