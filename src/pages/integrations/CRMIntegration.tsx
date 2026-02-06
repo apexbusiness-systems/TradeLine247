@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Database, Settings } from 'lucide-react';
-import { SettingsSection, ProviderGrid, FormSelect } from '@/components/integrations/IntegrationCard';
+import { SettingsSection, ProviderGrid, FormSelect, FormSelectRow } from '@/components/integrations/IntegrationCard';
 import { IntegrationPageLayout } from '@/components/integrations/IntegrationPageLayout';
 import { useIntegrationConnect } from '@/components/integrations/useIntegrationConnect';
 
@@ -73,18 +72,18 @@ const CRMIntegration = () => {
         icon={Settings}
         title="Integration Settings"
         description="Configure how your AI receptionist interacts with your CRM"
+        saveLabel="Save Configuration"
       >
-        <div className="grid gap-4 md:grid-cols-2">
-          <FormSelect
-            id="sync-frequency"
-            label="Sync Frequency"
-            options={['Real-time', 'Every 5 minutes', 'Every 15 minutes', 'Hourly']}
-          />
+        <FormSelectRow
+          selects={[
+            { id: 'sync-frequency', label: 'Sync Frequency', options: ['Real-time', 'Every 5 minutes', 'Every 15 minutes', 'Hourly'] },
+          ]}
+        >
           <div className="space-y-2">
             <Label htmlFor="lead-source">Default Lead Source</Label>
             <Input id="lead-source" placeholder="AI Receptionist" defaultValue="TradeLine 24/7 AI" />
           </div>
-        </div>
+        </FormSelectRow>
 
         <div className="space-y-2">
           <Label htmlFor="webhook-url">Webhook URL (Optional)</Label>
@@ -94,7 +93,6 @@ const CRMIntegration = () => {
           </p>
         </div>
 
-        <Button className="w-full md:w-auto">Save Configuration</Button>
       </SettingsSection>
     </IntegrationPageLayout>
   );

@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Mail, Settings, Smartphone } from 'lucide-react';
-import { SettingsSection, ProviderGrid, FormSelect } from '@/components/integrations/IntegrationCard';
+import { SettingsSection, ProviderGrid, FormSelectRow } from '@/components/integrations/IntegrationCard';
 import { IntegrationPageLayout } from '@/components/integrations/IntegrationPageLayout';
 import { useIntegrationConnect } from '@/components/integrations/useIntegrationConnect';
 import type { IntegrationProvider } from '@/components/integrations/IntegrationCard';
@@ -94,6 +93,7 @@ TradeLine 24/7 Team`);
         icon={Settings}
         title="Email Templates"
         description="Customize automated email responses sent after calls"
+        saveLabel="Save Email Configuration"
       >
         <div className="space-y-2">
           <Label htmlFor="email-subject">Email Subject</Label>
@@ -125,20 +125,12 @@ TradeLine 24/7 Team`);
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <FormSelect
-            id="auto-send"
-            label="Auto-send emails"
-            options={['After every call', 'Only for qualified leads', 'Manual approval required', 'Disabled']}
-          />
-          <FormSelect
-            id="send-delay"
-            label="Send delay"
-            options={['Immediate', '5 minutes', '15 minutes', '1 hour']}
-          />
-        </div>
-
-        <Button className="w-full md:w-auto">Save Email Configuration</Button>
+        <FormSelectRow
+          selects={[
+            { id: 'auto-send', label: 'Auto-send emails', options: ['After every call', 'Only for qualified leads', 'Manual approval required', 'Disabled'] },
+            { id: 'send-delay', label: 'Send delay', options: ['Immediate', '5 minutes', '15 minutes', '1 hour'] },
+          ]}
+        />
       </SettingsSection>
     </IntegrationPageLayout>
   );
