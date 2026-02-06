@@ -6,72 +6,15 @@ import { IntegrationPageLayout } from '@/components/integrations/IntegrationPage
 import { useIntegrationConnect } from '@/components/integrations/useIntegrationConnect';
 import type { IntegrationProvider } from '@/components/integrations/IntegrationCard';
 
-interface MessagingApp extends IntegrationProvider {
-  setupType: string;
-  color: string;
-}
+interface MessagingApp extends IntegrationProvider { setupType: string; color: string }
 
 const messagingApps: MessagingApp[] = [
-  {
-    id: 'whatsapp',
-    name: 'WhatsApp Business',
-    description: "World's most popular messaging app",
-    logo: '💚',
-    status: 'available',
-    features: ['Business API', 'Auto-replies', 'Rich media support', 'Broadcast lists'],
-    setupType: 'oauth',
-    color: 'bg-[hsl(142,85%,95%)] text-[hsl(142,85%,25%)] border-[hsl(142,85%,70%)]',
-  },
-  {
-    id: 'telegram',
-    name: 'Telegram',
-    description: 'Fast and secure messaging',
-    logo: '✈️',
-    status: 'available',
-    features: ['Bot API', 'Inline queries', 'File sharing', 'Channel broadcasts'],
-    setupType: 'bot-token',
-    color: 'bg-blue-500/10 text-info border-info',
-  },
-  {
-    id: 'slack',
-    name: 'Slack',
-    description: 'Business communication platform',
-    logo: '💼',
-    status: 'available',
-    features: ['Slack app', 'Workflow automation', 'Custom commands', 'Thread replies'],
-    setupType: 'oauth',
-    color: 'bg-purple-500/10 text-neutral border-neutral',
-  },
-  {
-    id: 'teams',
-    name: 'Microsoft Teams',
-    description: 'Enterprise communication hub',
-    logo: '👥',
-    status: 'available',
-    features: ['Teams bot', 'Meeting integration', 'File collaboration', 'Power Automate'],
-    setupType: 'oauth',
-    color: 'bg-indigo-500/10 text-info border-indigo-500/20',
-  },
-  {
-    id: 'discord',
-    name: 'Discord',
-    description: 'Community chat platform',
-    logo: '🎮',
-    status: 'coming-soon',
-    features: ['Discord bot', 'Server integration', 'Voice channels', 'Rich embeds'],
-    setupType: 'bot-token',
-    color: 'bg-gray-500/10 text-gray-600 border-gray-500/20',
-  },
-  {
-    id: 'facebook',
-    name: 'Facebook Messenger',
-    description: "Meta's messaging platform",
-    logo: '📘',
-    status: 'coming-soon',
-    features: ['Messenger API', 'Rich cards', 'Quick replies', 'Persistent menu'],
-    setupType: 'oauth',
-    color: 'bg-blue-500/10 text-info border-info',
-  },
+  { id: 'whatsapp', name: 'WhatsApp Business', description: "World's most popular messaging app", logo: '💚', status: 'available', setupType: 'oauth', color: 'bg-[hsl(142,85%,95%)] text-[hsl(142,85%,25%)] border-[hsl(142,85%,70%)]', features: ['Business API', 'Auto-replies', 'Rich media support', 'Broadcast lists'] },
+  { id: 'telegram', name: 'Telegram', description: 'Fast and secure messaging', logo: '✈️', status: 'available', setupType: 'bot-token', color: 'bg-blue-500/10 text-info border-info', features: ['Bot API', 'Inline queries', 'File sharing', 'Channel broadcasts'] },
+  { id: 'slack', name: 'Slack', description: 'Business communication platform', logo: '💼', status: 'available', setupType: 'oauth', color: 'bg-purple-500/10 text-neutral border-neutral', features: ['Slack app', 'Workflow automation', 'Custom commands', 'Thread replies'] },
+  { id: 'teams', name: 'Microsoft Teams', description: 'Enterprise communication hub', logo: '👥', status: 'available', setupType: 'oauth', color: 'bg-indigo-500/10 text-info border-indigo-500/20', features: ['Teams bot', 'Meeting integration', 'File collaboration', 'Power Automate'] },
+  { id: 'discord', name: 'Discord', description: 'Community chat platform', logo: '🎮', status: 'coming-soon', setupType: 'bot-token', color: 'bg-gray-500/10 text-gray-600 border-gray-500/20', features: ['Discord bot', 'Server integration', 'Voice channels', 'Rich embeds'] },
+  { id: 'facebook', name: 'Facebook Messenger', description: "Meta's messaging platform", logo: '📘', status: 'coming-soon', setupType: 'oauth', color: 'bg-blue-500/10 text-info border-info', features: ['Messenger API', 'Rich cards', 'Quick replies', 'Persistent menu'] },
 ];
 
 const MessagingIntegration = () => {
