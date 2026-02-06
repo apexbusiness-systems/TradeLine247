@@ -1,7 +1,8 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { CheckCircle, ExternalLink, type LucideIcon } from 'lucide-react';
 
 /** Shared inline style for premium glass-morphism cards used across integration pages. */
 export const premiumCardStyle: React.CSSProperties = {
@@ -92,5 +93,92 @@ export function FeatureList({ features, columns = 1 }: { features: string[]; col
         ))}
       </div>
     </div>
+  );
+}
+
+/**
+ * Premium glass-morphism settings section used across integration pages.
+ * Wraps Card + gradient overlay + CardHeader + CardContent boilerplate.
+ */
+interface SettingsSectionProps {
+  icon: LucideIcon;
+  title: string;
+  description: string;
+  children: React.ReactNode;
+  /** Extra className on CardContent (e.g. "space-y-6" vs "space-y-4") */
+  contentClassName?: string;
+  /** Extra className on outermost Card */
+  className?: string;
+}
+
+export function SettingsSection({
+  icon: Icon,
+  title,
+  description,
+  children,
+  contentClassName = 'space-y-6',
+  className = '',
+}: SettingsSectionProps) {
+  return (
+    <Card
+      className={`relative overflow-hidden border-0 bg-card/60 backdrop-blur-sm ${className}`}
+      style={premiumCardStyle}
+    >
+      <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none" />
+      <CardHeader className="relative z-10">
+        <CardTitle className="flex items-center gap-2">
+          <Icon className="h-5 w-5" />
+          {title}
+        </CardTitle>
+        <p className="text-sm text-muted-foreground">{description}</p>
+      </CardHeader>
+      <CardContent className={`relative z-10 ${contentClassName}`}>{children}</CardContent>
+    </Card>
+  );
+}
+
+/**
+ * Standardised connect button used by most integration pages.
+ */
+interface ConnectButtonProps {
+  providerName: string;
+  isConnecting: boolean;
+  onClick: () => void;
+  disabled?: boolean;
+  /** Label shown when status is coming-soon */
+  comingSoon?: boolean;
+  /** Override the button icon (defaults to ExternalLink) */
+  icon?: LucideIcon;
+  /** Override the verb (defaults to "Connect") */
+  verb?: string;
+  /** Override the loading label (defaults to "Connecting...") */
+  loadingLabel?: string;
+  className?: string;
+}
+
+export function ConnectButton({
+  providerName,
+  isConnecting,
+  onClick,
+  disabled,
+  comingSoon,
+  icon: BtnIcon = ExternalLink,
+  verb = 'Connect',
+  loadingLabel = 'Connecting...',
+  className = 'w-full',
+}: ConnectButtonProps) {
+  return (
+    <Button
+      className={className}
+      onClick={onClick}
+      disabled={disabled ?? (isConnecting || comingSoon)}
+    >
+      {comingSoon ? 'Coming Soon' : isConnecting ? loadingLabel : (
+        <>
+          <BtnIcon className="h-4 w-4 mr-2" />
+          {verb} {providerName}
+        </>
+      )}
+    </Button>
   );
 }

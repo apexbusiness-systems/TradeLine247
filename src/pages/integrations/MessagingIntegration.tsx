@@ -1,14 +1,13 @@
 import React, { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
 import { MessageSquare, ExternalLink, Settings, Zap } from 'lucide-react';
 import { toast } from 'sonner';
-import { IntegrationCard, premiumCardStyle, type IntegrationProvider } from '@/components/integrations/IntegrationCard';
+import { IntegrationCard, SettingsSection, ConnectButton } from '@/components/integrations/IntegrationCard';
 import { IntegrationPageLayout } from '@/components/integrations/IntegrationPageLayout';
 import { useIntegrationConnect } from '@/components/integrations/useIntegrationConnect';
+import type { IntegrationProvider } from '@/components/integrations/IntegrationCard';
 
 interface MessagingApp extends IntegrationProvider {
   setupType: string;
@@ -111,20 +110,13 @@ const MessagingIntegration = () => {
             provider={app}
             dimmed={app.status === 'coming-soon'}
             footer={
-              <Button
-                className="w-full"
+              <ConnectButton
+                providerName={app.name}
+                isConnecting={isConnecting}
                 onClick={() => handleConnect(app)}
-                disabled={isConnecting || app.status === 'coming-soon'}
-              >
-                {app.status === 'coming-soon' ? 'Coming Soon' : isConnecting ? 'Connecting...' : (
-                  <>
-                    {app.setupType === 'oauth'
-                      ? <ExternalLink className="h-4 w-4 mr-2" />
-                      : <Settings className="h-4 w-4 mr-2" />}
-                    Connect {app.name}
-                  </>
-                )}
-              </Button>
+                comingSoon={app.status === 'coming-soon'}
+                icon={app.setupType === 'oauth' ? ExternalLink : Settings}
+              />
             }
           >
             {app.setupType === 'bot-token' && app.id === 'telegram' && app.status === 'available' && (
@@ -145,65 +137,54 @@ const MessagingIntegration = () => {
         ))}
       </div>
 
-      {/* Auto-response Configuration */}
-      <Card className="relative overflow-hidden border-0 bg-card/60 backdrop-blur-sm" style={premiumCardStyle}>
-        <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none" />
+      <SettingsSection
+        icon={Zap}
+        title="Auto-Response Settings"
+        description="Configure automated responses across all messaging platforms"
+      >
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="response-delay">Response Delay</Label>
+            <select id="response-delay" className="w-full p-2 rounded-md border border-input bg-background">
+              <option>Immediate</option>
+              <option>30 seconds</option>
+              <option>1 minute</option>
+              <option>2 minutes</option>
+            </select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="business-hours">Business Hours Only</Label>
+            <select id="business-hours" className="w-full p-2 rounded-md border border-input bg-background">
+              <option>Yes</option>
+              <option>No</option>
+              <option>Custom schedule</option>
+            </select>
+          </div>
+        </div>
 
-        <CardHeader className="relative z-10">
-          <CardTitle className="flex items-center gap-2">
-            <Zap className="h-5 w-5" />
-            Auto-Response Settings
-          </CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Configure automated responses across all messaging platforms
+        <div className="space-y-2">
+          <Label htmlFor="auto-message">Default Auto-Reply Message</Label>
+          <Input
+            id="auto-message"
+            placeholder="Thanks for your message! We'll get back to you soon."
+            defaultValue="Hi! Thanks for reaching out to TradeLine 24/7. We've received your message and will respond within 24 hours during business hours."
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="keywords">Keyword Triggers (comma-separated)</Label>
+          <Input
+            id="keywords"
+            placeholder="urgent, help, pricing, demo"
+            defaultValue="urgent, help, support, pricing, demo, info"
+          />
+          <p className="text-xs text-muted-foreground">
+            Messages containing these keywords will trigger immediate notifications
           </p>
-        </CardHeader>
+        </div>
 
-        <CardContent className="relative z-10 space-y-6">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="response-delay">Response Delay</Label>
-              <select id="response-delay" className="w-full p-2 rounded-md border border-input bg-background">
-                <option>Immediate</option>
-                <option>30 seconds</option>
-                <option>1 minute</option>
-                <option>2 minutes</option>
-              </select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="business-hours">Business Hours Only</Label>
-              <select id="business-hours" className="w-full p-2 rounded-md border border-input bg-background">
-                <option>Yes</option>
-                <option>No</option>
-                <option>Custom schedule</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="auto-message">Default Auto-Reply Message</Label>
-            <Input
-              id="auto-message"
-              placeholder="Thanks for your message! We'll get back to you soon."
-              defaultValue="Hi! Thanks for reaching out to TradeLine 24/7. We've received your message and will respond within 24 hours during business hours."
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="keywords">Keyword Triggers (comma-separated)</Label>
-            <Input
-              id="keywords"
-              placeholder="urgent, help, pricing, demo"
-              defaultValue="urgent, help, support, pricing, demo, info"
-            />
-            <p className="text-xs text-muted-foreground">
-              Messages containing these keywords will trigger immediate notifications
-            </p>
-          </div>
-
-          <Button className="w-full md:w-auto">Save Auto-Response Settings</Button>
-        </CardContent>
-      </Card>
+        <Button className="w-full md:w-auto">Save Auto-Response Settings</Button>
+      </SettingsSection>
     </IntegrationPageLayout>
   );
 };

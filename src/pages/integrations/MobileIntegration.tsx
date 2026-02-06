@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Smartphone, Download, Settings, ExternalLink, QrCode } from 'lucide-react';
 import { toast } from 'sonner';
-import { premiumCardStyle } from '@/components/integrations/IntegrationCard';
+import { premiumCardStyle, SettingsSection } from '@/components/integrations/IntegrationCard';
 import { IntegrationPageLayout } from '@/components/integrations/IntegrationPageLayout';
 
 const mobileFeatures = [
@@ -113,82 +113,64 @@ const MobileIntegration = () => {
       )}
 
       {/* Mobile Features */}
-      <Card className="relative overflow-hidden border-0 bg-card/60 backdrop-blur-sm" style={premiumCardStyle}>
-        <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none" />
-
-        <CardHeader className="relative z-10">
-          <CardTitle className="flex items-center gap-2">
-            <Settings className="h-5 w-5" />
-            Mobile App Features
-          </CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Powerful features available in our native mobile apps
-          </p>
-        </CardHeader>
-
-        <CardContent className="relative z-10">
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {mobileFeatures.map((feature, index) => (
-              <div
-                key={feature.id}
-                className="p-4 rounded-2xl bg-gradient-to-r from-muted/10 to-muted/5 border border-transparent hover:border-primary/20 transition-all duration-300 hover:shadow-[var(--premium-shadow-subtle)] animate-fade-in"
-                style={{ animationDelay: `${index * 100}ms` }}
-              >
-                <div className="flex items-start gap-3">
-                  <div className="text-2xl">{feature.icon}</div>
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-foreground mb-1">{feature.title}</h3>
-                    <p className="text-sm text-muted-foreground mb-3">{feature.description}</p>
-                    <div className="flex gap-2">
-                      {feature.platforms.map((platform) => (
-                        <Badge key={platform} className="bg-blue-500/10 text-info border-info text-xs">
-                          {platform}
-                        </Badge>
-                      ))}
-                    </div>
+      <SettingsSection
+        icon={Settings}
+        title="Mobile App Features"
+        description="Powerful features available in our native mobile apps"
+        contentClassName=""
+      >
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {mobileFeatures.map((feature, index) => (
+            <div
+              key={feature.id}
+              className="p-4 rounded-2xl bg-gradient-to-r from-muted/10 to-muted/5 border border-transparent hover:border-primary/20 transition-all duration-300 hover:shadow-[var(--premium-shadow-subtle)] animate-fade-in"
+              style={{ animationDelay: `${index * 100}ms` }}
+            >
+              <div className="flex items-start gap-3">
+                <div className="text-2xl">{feature.icon}</div>
+                <div className="flex-1">
+                  <h3 className="font-semibold text-foreground mb-1">{feature.title}</h3>
+                  <p className="text-sm text-muted-foreground mb-3">{feature.description}</p>
+                  <div className="flex gap-2">
+                    {feature.platforms.map((platform) => (
+                      <Badge key={platform} className="bg-blue-500/10 text-info border-info text-xs">
+                        {platform}
+                      </Badge>
+                    ))}
                   </div>
                 </div>
               </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+            </div>
+          ))}
+        </div>
+      </SettingsSection>
 
       {/* Setup Instructions */}
-      <Card className="relative overflow-hidden border-0 bg-card/60 backdrop-blur-sm" style={premiumCardStyle}>
-        <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none" />
-
-        <CardHeader className="relative z-10">
-          <CardTitle className="flex items-center gap-2">
-            <ExternalLink className="h-5 w-5" />
-            Getting Started
-          </CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Follow these steps to set up the mobile app
-          </p>
-        </CardHeader>
-
-        <CardContent className="relative z-10 space-y-4">
-          <div className="space-y-3">
-            {[
-              { step: 1, title: 'Download the App', desc: "Get the TradeLine 24/7 app from your device's app store" },
-              { step: 2, title: 'Sign In', desc: 'Use your TradeLine 24/7 account credentials to sign in' },
-              { step: 3, title: 'Enable Notifications', desc: 'Allow push notifications to stay updated on calls and messages' },
-              { step: 4, title: 'Configure Settings', desc: 'Customize your preferences and sync with your dashboard settings' },
-            ].map(({ step, title, desc }) => (
-              <div key={step} className="flex items-start gap-3">
-                <div className="w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-bold">
-                  {step}
-                </div>
-                <div>
-                  <h3 className="font-semibold text-foreground">{title}</h3>
-                  <p className="text-sm text-muted-foreground">{desc}</p>
-                </div>
+      <SettingsSection
+        icon={ExternalLink}
+        title="Getting Started"
+        description="Follow these steps to set up the mobile app"
+        contentClassName="space-y-4"
+      >
+        <div className="space-y-3">
+          {[
+            { step: 1, title: 'Download the App', desc: "Get the TradeLine 24/7 app from your device's app store" },
+            { step: 2, title: 'Sign In', desc: 'Use your TradeLine 24/7 account credentials to sign in' },
+            { step: 3, title: 'Enable Notifications', desc: 'Allow push notifications to stay updated on calls and messages' },
+            { step: 4, title: 'Configure Settings', desc: 'Customize your preferences and sync with your dashboard settings' },
+          ].map(({ step, title, desc }) => (
+            <div key={step} className="flex items-start gap-3">
+              <div className="w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-bold">
+                {step}
               </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+              <div>
+                <h3 className="font-semibold text-foreground">{title}</h3>
+                <p className="text-sm text-muted-foreground">{desc}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </SettingsSection>
     </IntegrationPageLayout>
   );
 };

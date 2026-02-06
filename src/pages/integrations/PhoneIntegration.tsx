@@ -7,9 +7,10 @@ import { Badge } from '@/components/ui/badge';
 import { Phone, Smartphone, MessageSquare, Settings } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { IntegrationCard, FeatureList, premiumCardStyle, type IntegrationProvider } from '@/components/integrations/IntegrationCard';
+import { IntegrationCard, FeatureList, ConnectButton, premiumCardStyle } from '@/components/integrations/IntegrationCard';
 import { IntegrationPageLayout } from '@/components/integrations/IntegrationPageLayout';
 import { useIntegrationConnect } from '@/components/integrations/useIntegrationConnect';
+import type { IntegrationProvider } from '@/components/integrations/IntegrationCard';
 
 interface PhoneProvider extends IntegrationProvider {
   platform: string;
@@ -148,14 +149,14 @@ const PhoneIntegration = () => {
               provider={integration}
               extraBadge={<Badge className={`mt-2 ${integration.color}`}>{integration.platform}</Badge>}
               footer={
-                <Button className="w-full" onClick={() => handleConnect(integration)} disabled={isConnecting}>
-                  {isConnecting ? 'Setting up...' : (
-                    <>
-                      <Settings className="h-4 w-4 mr-2" />
-                      Configure {integration.name}
-                    </>
-                  )}
-                </Button>
+                <ConnectButton
+                  providerName={integration.name}
+                  isConnecting={isConnecting}
+                  onClick={() => handleConnect(integration)}
+                  icon={Settings}
+                  verb="Configure"
+                  loadingLabel="Setting up..."
+                />
               }
             />
           ))}

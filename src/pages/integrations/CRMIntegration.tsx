@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Database, ExternalLink, Settings } from 'lucide-react';
-import { IntegrationCard, premiumCardStyle } from '@/components/integrations/IntegrationCard';
+import { Database, Settings } from 'lucide-react';
+import { IntegrationCard, SettingsSection, ConnectButton } from '@/components/integrations/IntegrationCard';
 import { IntegrationPageLayout } from '@/components/integrations/IntegrationPageLayout';
 import { useIntegrationConnect } from '@/components/integrations/useIntegrationConnect';
 
@@ -70,62 +69,47 @@ const CRMIntegration = () => {
             key={provider.id}
             provider={provider}
             footer={
-              <Button className="w-full" onClick={() => handleConnect(provider)} disabled={isConnecting}>
-                {isConnecting ? 'Connecting...' : (
-                  <>
-                    <ExternalLink className="h-4 w-4 mr-2" />
-                    Connect {provider.name}
-                  </>
-                )}
-              </Button>
+              <ConnectButton
+                providerName={provider.name}
+                isConnecting={isConnecting}
+                onClick={() => handleConnect(provider)}
+              />
             }
           />
         ))}
       </div>
 
-      {/* Configuration Section */}
-      <Card className="relative overflow-hidden border-0 bg-card/60 backdrop-blur-sm" style={premiumCardStyle}>
-        <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none" />
-
-        <CardHeader className="relative z-10">
-          <CardTitle className="flex items-center gap-2">
-            <Settings className="h-5 w-5" />
-            Integration Settings
-          </CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Configure how your AI receptionist interacts with your CRM
-          </p>
-        </CardHeader>
-
-        <CardContent className="relative z-10 space-y-6">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="sync-frequency">Sync Frequency</Label>
-              <select id="sync-frequency" className="w-full p-2 rounded-md border border-input bg-background">
-                <option>Real-time</option>
-                <option>Every 5 minutes</option>
-                <option>Every 15 minutes</option>
-                <option>Hourly</option>
-              </select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="lead-source">Default Lead Source</Label>
-              <Input id="lead-source" placeholder="AI Receptionist" defaultValue="TradeLine 24/7 AI" />
-            </div>
-          </div>
-
+      <SettingsSection
+        icon={Settings}
+        title="Integration Settings"
+        description="Configure how your AI receptionist interacts with your CRM"
+      >
+        <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="webhook-url">Webhook URL (Optional)</Label>
-            <Input id="webhook-url" placeholder="https://your-crm.com/webhook" type="url" />
-            <p className="text-xs text-muted-foreground">
-              Receive real-time notifications when leads are created or updated
-            </p>
+            <Label htmlFor="sync-frequency">Sync Frequency</Label>
+            <select id="sync-frequency" className="w-full p-2 rounded-md border border-input bg-background">
+              <option>Real-time</option>
+              <option>Every 5 minutes</option>
+              <option>Every 15 minutes</option>
+              <option>Hourly</option>
+            </select>
           </div>
+          <div className="space-y-2">
+            <Label htmlFor="lead-source">Default Lead Source</Label>
+            <Input id="lead-source" placeholder="AI Receptionist" defaultValue="TradeLine 24/7 AI" />
+          </div>
+        </div>
 
-          <Button className="w-full md:w-auto">Save Configuration</Button>
-        </CardContent>
-      </Card>
+        <div className="space-y-2">
+          <Label htmlFor="webhook-url">Webhook URL (Optional)</Label>
+          <Input id="webhook-url" placeholder="https://your-crm.com/webhook" type="url" />
+          <p className="text-xs text-muted-foreground">
+            Receive real-time notifications when leads are created or updated
+          </p>
+        </div>
+
+        <Button className="w-full md:w-auto">Save Configuration</Button>
+      </SettingsSection>
     </IntegrationPageLayout>
   );
 };
