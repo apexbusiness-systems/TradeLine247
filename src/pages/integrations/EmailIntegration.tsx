@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import { paths } from '@/routes/paths';
 import { ArrowLeft, Mail, ExternalLink, Settings, CheckCircle, Smartphone } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 
 const emailProviders = [
   {
@@ -69,14 +70,21 @@ We'll be in touch soon!
 Best regards,
 TradeLine 24/7 Team`);
 
-  const handleConnect = async (provider: any) => {
+  const handleConnect = async (provider: typeof emailProviders[number]) => {
     setIsConnecting(true);
-    
+
     try {
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      toast.success(`Successfully connected to ${provider.name}!`);
+      if (!supabase) throw new Error('Service unavailable');
+
+      const { data, error } = await supabase.functions.invoke('integration-connect', {
+        body: { provider: provider.id, category: 'email' },
+      });
+
+      if (error) throw error;
+      toast.success(data?.message ?? `Successfully connected to ${provider.name}!`);
     } catch (error) {
-      toast.error(`Failed to connect to ${provider.name}`);
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      toast.error(`Failed to connect to ${provider.name}: ${msg}`);
     } finally {
       setIsConnecting(false);
     }

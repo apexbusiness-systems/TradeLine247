@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { paths } from '@/routes/paths';
 import { ArrowLeft, Phone, Smartphone, MessageSquare, Settings, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 
 const phoneIntegrations = [
   {
@@ -77,31 +78,51 @@ const PhoneIntegration = () => {
     phoneNumber: ''
   });
 
-  const handleConnect = async (integration: any) => {
+  const handleConnect = async (integration: typeof phoneIntegrations[number]) => {
     setIsConnecting(true);
-    
+
     try {
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      toast.success(`Successfully connected to ${integration.name}!`);
+      if (!supabase) throw new Error('Service unavailable');
+
+      const { data, error } = await supabase.functions.invoke('integration-connect', {
+        body: { provider: integration.id, category: 'phone', platform: integration.platform },
+      });
+
+      if (error) throw error;
+      toast.success(data?.message ?? `Successfully connected to ${integration.name}!`);
     } catch (error) {
-      toast.error(`Failed to connect to ${integration.name}`);
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      toast.error(`Failed to connect to ${integration.name}: ${msg}`);
     } finally {
       setIsConnecting(false);
     }
   };
 
-  const handleProviderSetup = async (provider: any) => {
+  const handleProviderSetup = async (provider: typeof smsProviders[number]) => {
     if (provider.id === 'twilio' && (!twilioCredentials.accountSid || !twilioCredentials.authToken)) {
       toast.error('Please fill in your Twilio credentials');
       return;
     }
-    
+
     setIsConnecting(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      toast.success(`Successfully configured ${provider.name}!`);
+      if (!supabase) throw new Error('Service unavailable');
+
+      const { data, error } = await supabase.functions.invoke('integration-connect', {
+        body: {
+          provider: provider.id,
+          category: 'sms-provider',
+          credentials: provider.id === 'twilio'
+            ? { accountSid: twilioCredentials.accountSid, authToken: twilioCredentials.authToken, phoneNumber: twilioCredentials.phoneNumber }
+            : undefined,
+        },
+      });
+
+      if (error) throw error;
+      toast.success(data?.message ?? `Successfully configured ${provider.name}!`);
     } catch (error) {
-      toast.error(`Failed to configure ${provider.name}`);
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      toast.error(`Failed to configure ${provider.name}: ${msg}`);
     } finally {
       setIsConnecting(false);
     }

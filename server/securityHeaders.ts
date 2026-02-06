@@ -10,6 +10,9 @@ import type { Request, Response, NextFunction } from 'express';
  * Get helmet configuration with enhanced security headers
  */
 export function getSecurityHeaders() {
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
+  const apiBaseUrl = process.env.API_BASE_URL || 'https://api.tradeline247ai.com';
+
   return helmet({
     // Content Security Policy - Secure configuration without unsafe directives
     contentSecurityPolicy: {
@@ -20,11 +23,10 @@ export function getSecurityHeaders() {
         imgSrc: ["'self'", "data:", "https:"],
         connectSrc: [
           "'self'",
-          "https://hysvqdwmhxnblxfqnszn.supabase.co",
-          "wss://hysvqdwmhxnblxfqnszn.supabase.co",
-          "https://api.tradeline247ai.com",
-          "wss://api.tradeline247ai.com"
-        ],
+          ...(supabaseUrl ? [supabaseUrl, supabaseUrl.replace('https://', 'wss://')] : []),
+          apiBaseUrl,
+          apiBaseUrl.replace('https://', 'wss://'),
+        ].filter(Boolean),
         fontSrc: ["'self'", "data:"],
         objectSrc: ["'none'"],
         mediaSrc: ["'self'"],
@@ -127,12 +129,18 @@ export function additionalSecurityHeaders(req: Request, res: Response, next: Nex
  * CORS configuration for API endpoints
  */
 export function getCorsOptions() {
+  const isProduction = process.env.NODE_ENV === 'production';
+  const extraOrigins = process.env.CORS_ALLOWED_ORIGINS
+    ? process.env.CORS_ALLOWED_ORIGINS.split(',').map(o => o.trim())
+    : [];
+
   return {
     origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
       const allowedOrigins = [
         'https://tradeline247ai.com',
         'https://www.tradeline247ai.com',
         'https://api.tradeline247ai.com',
+        ...extraOrigins,
       ];
 
       // Allow requests with no origin (mobile apps, curl, etc.)
@@ -140,8 +148,10 @@ export function getCorsOptions() {
         return callback(null, true);
       }
 
-      // Check if origin is in allowed list
-      if (allowedOrigins.includes(origin) || origin.includes('localhost')) {
+      // Allow localhost only in non-production environments
+      const isLocalhost = !isProduction && /^https?:\/\/localhost(:\d+)?$/.test(origin);
+
+      if (allowedOrigins.includes(origin) || isLocalhost) {
         callback(null, true);
       } else {
         callback(new Error('Not allowed by CORS'));
