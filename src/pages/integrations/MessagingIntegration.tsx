@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { MessageSquare, ExternalLink, Settings, Zap } from 'lucide-react';
 import { toast } from 'sonner';
-import { IntegrationCard, SettingsSection, ConnectButton } from '@/components/integrations/IntegrationCard';
+import { SettingsSection, ProviderGrid, FormSelect } from '@/components/integrations/IntegrationCard';
 import { IntegrationPageLayout } from '@/components/integrations/IntegrationPageLayout';
 import { useIntegrationConnect } from '@/components/integrations/useIntegrationConnect';
 import type { IntegrationProvider } from '@/components/integrations/IntegrationCard';
@@ -103,39 +103,29 @@ const MessagingIntegration = () => {
       iconGradient="from-orange-500/10 to-orange-500/5"
       iconColor="text-brand-primary"
     >
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {messagingApps.map((app) => (
-          <IntegrationCard
-            key={app.id}
-            provider={app}
-            dimmed={app.status === 'coming-soon'}
-            footer={
-              <ConnectButton
-                providerName={app.name}
-                isConnecting={isConnecting}
-                onClick={() => handleConnect(app)}
-                comingSoon={app.status === 'coming-soon'}
-                icon={app.setupType === 'oauth' ? ExternalLink : Settings}
+      <ProviderGrid
+        providers={messagingApps}
+        isConnecting={isConnecting}
+        onConnect={handleConnect}
+        columns={3}
+        connectIcon={(app) => (app as MessagingApp).setupType === 'oauth' ? ExternalLink : Settings}
+        renderChildren={(app) =>
+          app.id === 'telegram' && app.status === 'available' ? (
+            <div className="space-y-2 pt-4 border-t border-muted/20">
+              <Label htmlFor="telegram-token">Bot Token</Label>
+              <Input
+                id="telegram-token"
+                placeholder="1234567890:ABCdefGHIjklMNOpqrsTUVwxyz"
+                value={telegramBotToken}
+                onChange={(e) => setTelegramBotToken(e.target.value)}
               />
-            }
-          >
-            {app.setupType === 'bot-token' && app.id === 'telegram' && app.status === 'available' && (
-              <div className="space-y-2 pt-4 border-t border-muted/20">
-                <Label htmlFor="telegram-token">Bot Token</Label>
-                <Input
-                  id="telegram-token"
-                  placeholder="1234567890:ABCdefGHIjklMNOpqrsTUVwxyz"
-                  value={telegramBotToken}
-                  onChange={(e) => setTelegramBotToken(e.target.value)}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Get your bot token from @BotFather on Telegram
-                </p>
-              </div>
-            )}
-          </IntegrationCard>
-        ))}
-      </div>
+              <p className="text-xs text-muted-foreground">
+                Get your bot token from @BotFather on Telegram
+              </p>
+            </div>
+          ) : null
+        }
+      />
 
       <SettingsSection
         icon={Zap}
@@ -143,23 +133,16 @@ const MessagingIntegration = () => {
         description="Configure automated responses across all messaging platforms"
       >
         <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="response-delay">Response Delay</Label>
-            <select id="response-delay" className="w-full p-2 rounded-md border border-input bg-background">
-              <option>Immediate</option>
-              <option>30 seconds</option>
-              <option>1 minute</option>
-              <option>2 minutes</option>
-            </select>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="business-hours">Business Hours Only</Label>
-            <select id="business-hours" className="w-full p-2 rounded-md border border-input bg-background">
-              <option>Yes</option>
-              <option>No</option>
-              <option>Custom schedule</option>
-            </select>
-          </div>
+          <FormSelect
+            id="response-delay"
+            label="Response Delay"
+            options={['Immediate', '30 seconds', '1 minute', '2 minutes']}
+          />
+          <FormSelect
+            id="business-hours"
+            label="Business Hours Only"
+            options={['Yes', 'No', 'Custom schedule']}
+          />
         </div>
 
         <div className="space-y-2">

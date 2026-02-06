@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Database, Settings } from 'lucide-react';
-import { IntegrationCard, SettingsSection, ConnectButton } from '@/components/integrations/IntegrationCard';
+import { SettingsSection, ProviderGrid, FormSelect } from '@/components/integrations/IntegrationCard';
 import { IntegrationPageLayout } from '@/components/integrations/IntegrationPageLayout';
 import { useIntegrationConnect } from '@/components/integrations/useIntegrationConnect';
 
@@ -63,21 +63,11 @@ const CRMIntegration = () => {
       iconGradient="from-blue-500/10 to-blue-500/5"
       iconColor="text-info"
     >
-      <div className="grid gap-6 md:grid-cols-2">
-        {crmProviders.map((provider) => (
-          <IntegrationCard
-            key={provider.id}
-            provider={provider}
-            footer={
-              <ConnectButton
-                providerName={provider.name}
-                isConnecting={isConnecting}
-                onClick={() => handleConnect(provider)}
-              />
-            }
-          />
-        ))}
-      </div>
+      <ProviderGrid
+        providers={crmProviders}
+        isConnecting={isConnecting}
+        onConnect={handleConnect}
+      />
 
       <SettingsSection
         icon={Settings}
@@ -85,15 +75,11 @@ const CRMIntegration = () => {
         description="Configure how your AI receptionist interacts with your CRM"
       >
         <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="sync-frequency">Sync Frequency</Label>
-            <select id="sync-frequency" className="w-full p-2 rounded-md border border-input bg-background">
-              <option>Real-time</option>
-              <option>Every 5 minutes</option>
-              <option>Every 15 minutes</option>
-              <option>Hourly</option>
-            </select>
-          </div>
+          <FormSelect
+            id="sync-frequency"
+            label="Sync Frequency"
+            options={['Real-time', 'Every 5 minutes', 'Every 15 minutes', 'Hourly']}
+          />
           <div className="space-y-2">
             <Label htmlFor="lead-source">Default Lead Source</Label>
             <Input id="lead-source" placeholder="AI Receptionist" defaultValue="TradeLine 24/7 AI" />

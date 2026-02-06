@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Mail, Settings, Smartphone } from 'lucide-react';
-import { IntegrationCard, SettingsSection, ConnectButton } from '@/components/integrations/IntegrationCard';
+import { SettingsSection, ProviderGrid, FormSelect } from '@/components/integrations/IntegrationCard';
 import { IntegrationPageLayout } from '@/components/integrations/IntegrationPageLayout';
 import { useIntegrationConnect } from '@/components/integrations/useIntegrationConnect';
 import type { IntegrationProvider } from '@/components/integrations/IntegrationCard';
@@ -70,10 +70,6 @@ We'll be in touch soon!
 Best regards,
 TradeLine 24/7 Team`);
 
-  const handleConnect = async (provider: EmailProvider) => {
-    await connect(provider.name, { provider: provider.id, category: 'email' });
-  };
-
   return (
     <IntegrationPageLayout
       title="Email Integrations"
@@ -82,27 +78,17 @@ TradeLine 24/7 Team`);
       iconGradient="from-green-500/10 to-green-500/5"
       iconColor="text-[hsl(142,85%,25%)]"
     >
-      <div className="grid gap-6 md:grid-cols-2">
-        {emailProviders.map((provider) => (
-          <IntegrationCard
-            key={provider.id}
-            provider={provider}
-            extraBadge={
-              <div className="flex items-center gap-2 mt-2">
-                <Smartphone className="h-3 w-3 text-muted-foreground" />
-                <span className="text-xs text-muted-foreground">{provider.platform}</span>
-              </div>
-            }
-            footer={
-              <ConnectButton
-                providerName={provider.name}
-                isConnecting={isConnecting}
-                onClick={() => handleConnect(provider)}
-              />
-            }
-          />
-        ))}
-      </div>
+      <ProviderGrid
+        providers={emailProviders}
+        isConnecting={isConnecting}
+        onConnect={(provider) => connect(provider.name, { provider: provider.id, category: 'email' })}
+        renderExtraBadge={(provider) => (
+          <div className="flex items-center gap-2 mt-2">
+            <Smartphone className="h-3 w-3 text-muted-foreground" />
+            <span className="text-xs text-muted-foreground">{provider.platform}</span>
+          </div>
+        )}
+      />
 
       <SettingsSection
         icon={Settings}
@@ -140,24 +126,16 @@ TradeLine 24/7 Team`);
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="auto-send">Auto-send emails</Label>
-            <select id="auto-send" className="w-full p-2 rounded-md border border-input bg-background">
-              <option>After every call</option>
-              <option>Only for qualified leads</option>
-              <option>Manual approval required</option>
-              <option>Disabled</option>
-            </select>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="send-delay">Send delay</Label>
-            <select id="send-delay" className="w-full p-2 rounded-md border border-input bg-background">
-              <option>Immediate</option>
-              <option>5 minutes</option>
-              <option>15 minutes</option>
-              <option>1 hour</option>
-            </select>
-          </div>
+          <FormSelect
+            id="auto-send"
+            label="Auto-send emails"
+            options={['After every call', 'Only for qualified leads', 'Manual approval required', 'Disabled']}
+          />
+          <FormSelect
+            id="send-delay"
+            label="Send delay"
+            options={['Immediate', '5 minutes', '15 minutes', '1 hour']}
+          />
         </div>
 
         <Button className="w-full md:w-auto">Save Email Configuration</Button>
