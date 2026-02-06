@@ -2,6 +2,7 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { CheckCircle, ExternalLink, type LucideIcon } from 'lucide-react';
 
@@ -280,6 +281,27 @@ export function FormSelectRow({ selects, children }: FormSelectRowProps) {
         <FormSelect key={props.id} {...props} />
       ))}
       {children}
+    </div>
+  );
+}
+
+/**
+ * Shared labelled input field that wraps the repeated
+ * `<div className="space-y-2"><Label/><Input/><p description/></div>` pattern.
+ * Pass `children` instead of Input props to render a custom control (e.g. Textarea).
+ */
+interface FormFieldProps extends Omit<React.ComponentProps<typeof Input>, 'children'> {
+  label: string;
+  description?: string;
+  children?: React.ReactNode;
+}
+
+export function FormField({ id, label, description, children, ...inputProps }: FormFieldProps) {
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={id}>{label}</Label>
+      {children ?? <Input id={id} {...inputProps} />}
+      {description && <p className="text-xs text-muted-foreground">{description}</p>}
     </div>
   );
 }

@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Mail, Settings, Smartphone } from 'lucide-react';
-import { SettingsSection, ProviderGrid, FormSelectRow } from '@/components/integrations/IntegrationCard';
+import { SettingsSection, ProviderGrid, FormSelectRow, FormField } from '@/components/integrations/IntegrationCard';
 import { IntegrationPageLayout } from '@/components/integrations/IntegrationPageLayout';
 import { useIntegrationConnect } from '@/components/integrations/useIntegrationConnect';
 import type { IntegrationProvider } from '@/components/integrations/IntegrationCard';
@@ -95,14 +94,12 @@ TradeLine 24/7 Team`);
         description="Customize automated email responses sent after calls"
         saveLabel="Save Email Configuration"
       >
-        <div className="space-y-2">
-          <Label htmlFor="email-subject">Email Subject</Label>
-          <Input
-            id="email-subject"
-            placeholder="Thank you for calling TradeLine 24/7"
-            defaultValue="Thank you for calling TradeLine 24/7 - Follow-up"
-          />
-        </div>
+        <FormField
+          id="email-subject"
+          label="Email Subject"
+          placeholder="Thank you for calling TradeLine 24/7"
+          defaultValue="Thank you for calling TradeLine 24/7 - Follow-up"
+        />
 
         <div className="space-y-2">
           <Label htmlFor="email-template">Email Template</Label>

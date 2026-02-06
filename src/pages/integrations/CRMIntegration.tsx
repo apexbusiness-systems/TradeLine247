@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Database, Settings } from 'lucide-react';
-import { SettingsSection, ProviderGrid, FormSelect, FormSelectRow } from '@/components/integrations/IntegrationCard';
+import { SettingsSection, ProviderGrid, FormSelectRow, FormField } from '@/components/integrations/IntegrationCard';
 import { IntegrationPageLayout } from '@/components/integrations/IntegrationPageLayout';
 import { useIntegrationConnect } from '@/components/integrations/useIntegrationConnect';
 
@@ -79,19 +77,16 @@ const CRMIntegration = () => {
             { id: 'sync-frequency', label: 'Sync Frequency', options: ['Real-time', 'Every 5 minutes', 'Every 15 minutes', 'Hourly'] },
           ]}
         >
-          <div className="space-y-2">
-            <Label htmlFor="lead-source">Default Lead Source</Label>
-            <Input id="lead-source" placeholder="AI Receptionist" defaultValue="TradeLine 24/7 AI" />
-          </div>
+          <FormField id="lead-source" label="Default Lead Source" placeholder="AI Receptionist" defaultValue="TradeLine 24/7 AI" />
         </FormSelectRow>
 
-        <div className="space-y-2">
-          <Label htmlFor="webhook-url">Webhook URL (Optional)</Label>
-          <Input id="webhook-url" placeholder="https://your-crm.com/webhook" type="url" />
-          <p className="text-xs text-muted-foreground">
-            Receive real-time notifications when leads are created or updated
-          </p>
-        </div>
+        <FormField
+          id="webhook-url"
+          label="Webhook URL (Optional)"
+          placeholder="https://your-crm.com/webhook"
+          type="url"
+          description="Receive real-time notifications when leads are created or updated"
+        />
 
       </SettingsSection>
     </IntegrationPageLayout>

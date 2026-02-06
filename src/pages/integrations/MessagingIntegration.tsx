@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { MessageSquare, ExternalLink, Settings, Zap } from 'lucide-react';
 import { toast } from 'sonner';
-import { SettingsSection, ProviderGrid, FormSelectRow } from '@/components/integrations/IntegrationCard';
+import { SettingsSection, ProviderGrid, FormSelectRow, FormField } from '@/components/integrations/IntegrationCard';
 import { IntegrationPageLayout } from '@/components/integrations/IntegrationPageLayout';
 import { useIntegrationConnect } from '@/components/integrations/useIntegrationConnect';
 import type { IntegrationProvider } from '@/components/integrations/IntegrationCard';
@@ -110,17 +108,15 @@ const MessagingIntegration = () => {
         connectIcon={(app) => (app as MessagingApp).setupType === 'oauth' ? ExternalLink : Settings}
         renderChildren={(app) =>
           app.id === 'telegram' && app.status === 'available' ? (
-            <div className="space-y-2 pt-4 border-t border-muted/20">
-              <Label htmlFor="telegram-token">Bot Token</Label>
-              <Input
+            <div className="pt-4 border-t border-muted/20">
+              <FormField
                 id="telegram-token"
+                label="Bot Token"
                 placeholder="1234567890:ABCdefGHIjklMNOpqrsTUVwxyz"
                 value={telegramBotToken}
                 onChange={(e) => setTelegramBotToken(e.target.value)}
+                description="Get your bot token from @BotFather on Telegram"
               />
-              <p className="text-xs text-muted-foreground">
-                Get your bot token from @BotFather on Telegram
-              </p>
             </div>
           ) : null
         }
@@ -139,26 +135,20 @@ const MessagingIntegration = () => {
           ]}
         />
 
-        <div className="space-y-2">
-          <Label htmlFor="auto-message">Default Auto-Reply Message</Label>
-          <Input
-            id="auto-message"
-            placeholder="Thanks for your message! We'll get back to you soon."
-            defaultValue="Hi! Thanks for reaching out to TradeLine 24/7. We've received your message and will respond within 24 hours during business hours."
-          />
-        </div>
+        <FormField
+          id="auto-message"
+          label="Default Auto-Reply Message"
+          placeholder="Thanks for your message! We'll get back to you soon."
+          defaultValue="Hi! Thanks for reaching out to TradeLine 24/7. We've received your message and will respond within 24 hours during business hours."
+        />
 
-        <div className="space-y-2">
-          <Label htmlFor="keywords">Keyword Triggers (comma-separated)</Label>
-          <Input
-            id="keywords"
-            placeholder="urgent, help, pricing, demo"
-            defaultValue="urgent, help, support, pricing, demo, info"
-          />
-          <p className="text-xs text-muted-foreground">
-            Messages containing these keywords will trigger immediate notifications
-          </p>
-        </div>
+        <FormField
+          id="keywords"
+          label="Keyword Triggers (comma-separated)"
+          placeholder="urgent, help, pricing, demo"
+          defaultValue="urgent, help, support, pricing, demo, info"
+          description="Messages containing these keywords will trigger immediate notifications"
+        />
 
       </SettingsSection>
     </IntegrationPageLayout>

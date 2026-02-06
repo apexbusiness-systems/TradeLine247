@@ -1,13 +1,11 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Phone, Smartphone, MessageSquare, Settings } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { FeatureList, ProviderGrid, premiumCardStyle } from '@/components/integrations/IntegrationCard';
+import { FeatureList, ProviderGrid, premiumCardStyle, FormField } from '@/components/integrations/IntegrationCard';
 import { IntegrationPageLayout } from '@/components/integrations/IntegrationPageLayout';
 import { useIntegrationConnect } from '@/components/integrations/useIntegrationConnect';
 import type { IntegrationProvider } from '@/components/integrations/IntegrationCard';
@@ -173,34 +171,28 @@ const PhoneIntegration = () => {
 
                 {provider.id === 'twilio' && (
                   <div className="space-y-3 pt-4 border-t border-muted/20">
-                    <div className="space-y-2">
-                      <Label htmlFor="account-sid">Account SID</Label>
-                      <Input
-                        id="account-sid"
-                        placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                        value={twilioCredentials.accountSid}
-                        onChange={(e) => setTwilioCredentials((prev) => ({ ...prev, accountSid: e.target.value }))}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="auth-token">Auth Token</Label>
-                      <Input
-                        id="auth-token"
-                        type="password"
-                        placeholder="Your Twilio Auth Token"
-                        value={twilioCredentials.authToken}
-                        onChange={(e) => setTwilioCredentials((prev) => ({ ...prev, authToken: e.target.value }))}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="phone-number">Twilio Phone Number</Label>
-                      <Input
-                        id="phone-number"
-                        placeholder="+1234567890"
-                        value={twilioCredentials.phoneNumber}
-                        onChange={(e) => setTwilioCredentials((prev) => ({ ...prev, phoneNumber: e.target.value }))}
-                      />
-                    </div>
+                    <FormField
+                      id="account-sid"
+                      label="Account SID"
+                      placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                      value={twilioCredentials.accountSid}
+                      onChange={(e) => setTwilioCredentials((prev) => ({ ...prev, accountSid: e.target.value }))}
+                    />
+                    <FormField
+                      id="auth-token"
+                      label="Auth Token"
+                      type="password"
+                      placeholder="Your Twilio Auth Token"
+                      value={twilioCredentials.authToken}
+                      onChange={(e) => setTwilioCredentials((prev) => ({ ...prev, authToken: e.target.value }))}
+                    />
+                    <FormField
+                      id="phone-number"
+                      label="Twilio Phone Number"
+                      placeholder="+1234567890"
+                      value={twilioCredentials.phoneNumber}
+                      onChange={(e) => setTwilioCredentials((prev) => ({ ...prev, phoneNumber: e.target.value }))}
+                    />
                   </div>
                 )}
 
