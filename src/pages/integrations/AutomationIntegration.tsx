@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Zap, Settings, Play, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { SettingsSection, ProviderGrid, FormSelectRow } from '@/components/integrations/IntegrationCard';
+import { SettingsSection, ProviderGrid, FormSelectRow, FormField } from '@/components/integrations/IntegrationCard';
 import { IntegrationPageLayout } from '@/components/integrations/IntegrationPageLayout';
 import { useIntegrationConnect } from '@/components/integrations/useIntegrationConnect';
 import type { IntegrationProvider } from '@/components/integrations/IntegrationCard';
@@ -164,8 +163,11 @@ const AutomationIntegration = () => {
         description="Set up webhooks to trigger external automations"
         contentClassName="space-y-4"
       >
-        <div className="space-y-2">
-          <Label htmlFor="webhook-url">Webhook URL</Label>
+        <FormField
+          id="webhook-url"
+          label="Webhook URL"
+          description="Copy your webhook URL from Zapier, IFTTT, or other automation platforms"
+        >
           <div className="flex gap-2">
             <Input
               id="webhook-url"
@@ -179,10 +181,7 @@ const AutomationIntegration = () => {
               Test
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground">
-            Copy your webhook URL from Zapier, IFTTT, or other automation platforms
-          </p>
-        </div>
+        </FormField>
 
         <FormSelectRow
           selects={[
