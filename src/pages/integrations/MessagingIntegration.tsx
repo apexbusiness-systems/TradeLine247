@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { paths } from '@/routes/paths';
 import { ArrowLeft, MessageSquare, ExternalLink, Settings, CheckCircle, Zap } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 
 const messagingApps = [
   {
@@ -81,19 +82,30 @@ const MessagingIntegration = () => {
     whatsappApiKey: ''
   });
 
-  const handleConnect = async (app: any) => {
+  const handleConnect = async (app: typeof messagingApps[number]) => {
     setIsConnecting(true);
-    
+
     try {
       if (app.setupType === 'bot-token' && app.id === 'telegram' && !credentials.telegramBotToken) {
         toast.error('Please enter your Telegram bot token');
         return;
       }
-      
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      toast.success(`Successfully connected to ${app.name}!`);
+
+      if (!supabase) throw new Error('Service unavailable');
+
+      const { data, error } = await supabase.functions.invoke('integration-connect', {
+        body: {
+          provider: app.id,
+          category: 'messaging',
+          credentials: app.id === 'telegram' ? { botToken: credentials.telegramBotToken } : undefined,
+        },
+      });
+
+      if (error) throw error;
+      toast.success(data?.message ?? `Successfully connected to ${app.name}!`);
     } catch (error) {
-      toast.error(`Failed to connect to ${app.name}`);
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      toast.error(`Failed to connect to ${app.name}: ${msg}`);
     } finally {
       setIsConnecting(false);
     }

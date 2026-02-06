@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { paths } from '@/routes/paths';
 import { ArrowLeft, Zap, ExternalLink, Settings, CheckCircle, Play, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 
 const automationProviders = [
   {
@@ -97,21 +98,40 @@ const AutomationIntegration = () => {
   const [isConnecting, setIsConnecting] = useState(false);
   const [webhookUrl, setWebhookUrl] = useState('');
 
-  const handleConnect = async (provider: any) => {
+  const handleConnect = async (provider: typeof automationProviders[number]) => {
     setIsConnecting(true);
-    
+
     try {
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      toast.success(`Successfully connected to ${provider.name}!`);
+      if (!supabase) throw new Error('Service unavailable');
+
+      const { data, error } = await supabase.functions.invoke('integration-connect', {
+        body: { provider: provider.id, category: 'automation' },
+      });
+
+      if (error) throw error;
+      toast.success(data?.message ?? `Successfully connected to ${provider.name}!`);
     } catch (error) {
-      toast.error(`Failed to connect to ${provider.name}`);
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      toast.error(`Failed to connect to ${provider.name}: ${msg}`);
     } finally {
       setIsConnecting(false);
     }
   };
 
-  const handleTemplateSetup = (template: any) => {
-    toast.success(`Setting up "${template.title}" automation...`);
+  const handleTemplateSetup = async (template: typeof automationTemplates[number]) => {
+    try {
+      if (!supabase) throw new Error('Service unavailable');
+
+      const { data, error } = await supabase.functions.invoke('integration-connect', {
+        body: { provider: template.id, category: 'automation-template', webhookUrl: webhookUrl || undefined },
+      });
+
+      if (error) throw error;
+      toast.success(data?.message ?? `"${template.title}" automation configured!`);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      toast.error(`Failed to set up "${template.title}": ${msg}`);
+    }
   };
 
   const testWebhook = async () => {

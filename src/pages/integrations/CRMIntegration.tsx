@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { paths } from '@/routes/paths';
 import { ArrowLeft, Database, ExternalLink, Settings, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 
 const crmProviders = [
   {
@@ -55,23 +56,30 @@ const CRMIntegration = () => {
   const [apiKey, setApiKey] = useState('');
   const [isConnecting, setIsConnecting] = useState(false);
 
-  const handleConnect = async (provider: any) => {
+  const handleConnect = async (provider: typeof crmProviders[number]) => {
     setIsConnecting(true);
-    
+
     try {
-      // Simulate connection process
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      toast.success(`Successfully connected to ${provider.name}!`);
-      
-      // In a real implementation, this would:
-      // 1. Open OAuth flow for the provider
-      // 2. Handle the callback
-      // 3. Store the tokens securely
-      // 4. Test the connection
-      
+      if (!supabase) {
+        throw new Error('Service unavailable');
+      }
+
+      const { data, error } = await supabase.functions.invoke('integration-connect', {
+        body: {
+          provider: provider.id,
+          category: 'crm',
+          apiKey: apiKey || undefined,
+        },
+      });
+
+      if (error) throw error;
+
+      toast.success(data?.message ?? `Successfully connected to ${provider.name}!`);
+      setSelectedProvider(provider.id);
+      setApiKey('');
     } catch (error) {
-      toast.error(`Failed to connect to ${provider.name}`);
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      toast.error(`Failed to connect to ${provider.name}: ${msg}`);
     } finally {
       setIsConnecting(false);
     }

@@ -198,13 +198,13 @@ const MobileIntegration = () => {
             
             <CardContent className="relative z-10 py-8">
               <div className="inline-block p-8 bg-white rounded-2xl shadow-lg">
-                <div className="w-48 h-48 bg-gray-200 rounded-lg flex items-center justify-center">
-                  <div className="text-center">
-                    <QrCode className="h-16 w-16 mx-auto mb-2 text-gray-400" />
-                    <p className="text-sm text-gray-500">QR Code</p>
-                    <p className="text-xs text-gray-400">Scan to download</p>
-                  </div>
-                </div>
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=192x192&data=${encodeURIComponent('https://tradeline247ai.com/download')}`}
+                  alt="Download TradeLine 24/7 app"
+                  width={192}
+                  height={192}
+                  className="rounded-lg"
+                />
               </div>
               <p className="mt-4 text-muted-foreground">
                 Scan this QR code with your mobile device to download the app
