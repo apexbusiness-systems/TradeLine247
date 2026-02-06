@@ -2,6 +2,7 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
 import { CheckCircle, ExternalLink, type LucideIcon } from 'lucide-react';
 
 /** Shared inline style for premium glass-morphism cards used across integration pages. */
@@ -180,5 +181,79 @@ export function ConnectButton({
         </>
       )}
     </Button>
+  );
+}
+
+/**
+ * Generic provider grid that maps an array of providers into IntegrationCard + ConnectButton.
+ * Eliminates the duplicated grid → map → IntegrationCard → ConnectButton pattern.
+ */
+interface ProviderGridProps<T extends IntegrationProvider> {
+  providers: T[];
+  isConnecting: boolean;
+  onConnect: (provider: T) => void;
+  columns?: 2 | 3;
+  renderExtraBadge?: (provider: T) => React.ReactNode;
+  renderChildren?: (provider: T) => React.ReactNode;
+  connectVerb?: string;
+  connectIcon?: LucideIcon;
+  connectLoadingLabel?: string;
+}
+
+export function ProviderGrid<T extends IntegrationProvider>({
+  providers,
+  isConnecting,
+  onConnect,
+  columns = 2,
+  renderExtraBadge,
+  renderChildren,
+  connectVerb,
+  connectIcon,
+  connectLoadingLabel,
+}: ProviderGridProps<T>) {
+  return (
+    <div className={`grid gap-6 ${columns === 3 ? 'md:grid-cols-2 lg:grid-cols-3' : 'md:grid-cols-2'}`}>
+      {providers.map((provider) => (
+        <IntegrationCard
+          key={provider.id}
+          provider={provider}
+          dimmed={provider.status === 'coming-soon'}
+          extraBadge={renderExtraBadge?.(provider)}
+          footer={
+            <ConnectButton
+              providerName={provider.name}
+              isConnecting={isConnecting}
+              onClick={() => onConnect(provider)}
+              comingSoon={provider.status === 'coming-soon'}
+              verb={connectVerb}
+              icon={connectIcon}
+              loadingLabel={connectLoadingLabel}
+            />
+          }
+        >
+          {renderChildren?.(provider)}
+        </IntegrationCard>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Shared select field used across integration settings sections.
+ */
+interface FormSelectProps {
+  id: string;
+  label: string;
+  options: string[];
+}
+
+export function FormSelect({ id, label, options }: FormSelectProps) {
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={id}>{label}</Label>
+      <select id={id} className="w-full p-2 rounded-md border border-input bg-background">
+        {options.map((opt) => <option key={opt}>{opt}</option>)}
+      </select>
+    </div>
   );
 }

@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Phone, Smartphone, MessageSquare, Settings } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { IntegrationCard, FeatureList, ConnectButton, premiumCardStyle } from '@/components/integrations/IntegrationCard';
+import { FeatureList, ProviderGrid, premiumCardStyle } from '@/components/integrations/IntegrationCard';
 import { IntegrationPageLayout } from '@/components/integrations/IntegrationPageLayout';
 import { useIntegrationConnect } from '@/components/integrations/useIntegrationConnect';
 import type { IntegrationProvider } from '@/components/integrations/IntegrationCard';
@@ -84,14 +84,6 @@ const PhoneIntegration = () => {
     phoneNumber: '',
   });
 
-  const handleConnect = async (integration: PhoneProvider) => {
-    await connect(integration.name, {
-      provider: integration.id,
-      category: 'phone',
-      platform: integration.platform,
-    });
-  };
-
   const handleProviderSetup = async (provider: (typeof smsProviders)[number]) => {
     if (provider.id === 'twilio' && (!twilioCredentials.accountSid || !twilioCredentials.authToken)) {
       toast.error('Please fill in your Twilio credentials');
@@ -142,25 +134,17 @@ const PhoneIntegration = () => {
           Native Mobile Integrations
         </h2>
 
-        <div className="grid gap-6 md:grid-cols-2">
-          {phoneIntegrations.map((integration) => (
-            <IntegrationCard
-              key={integration.id}
-              provider={integration}
-              extraBadge={<Badge className={`mt-2 ${integration.color}`}>{integration.platform}</Badge>}
-              footer={
-                <ConnectButton
-                  providerName={integration.name}
-                  isConnecting={isConnecting}
-                  onClick={() => handleConnect(integration)}
-                  icon={Settings}
-                  verb="Configure"
-                  loadingLabel="Setting up..."
-                />
-              }
-            />
-          ))}
-        </div>
+        <ProviderGrid
+          providers={phoneIntegrations}
+          isConnecting={isConnecting}
+          onConnect={(integration) =>
+            connect(integration.name, { provider: integration.id, category: 'phone', platform: integration.platform })
+          }
+          connectVerb="Configure"
+          connectIcon={Settings}
+          connectLoadingLabel="Setting up..."
+          renderExtraBadge={(p) => <Badge className={`mt-2 ${p.color}`}>{p.platform}</Badge>}
+        />
       </div>
 
       {/* SMS Provider Configuration */}

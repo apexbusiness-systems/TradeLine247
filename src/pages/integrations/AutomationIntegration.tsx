@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Zap, Settings, Play, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { IntegrationCard, SettingsSection, ConnectButton } from '@/components/integrations/IntegrationCard';
+import { SettingsSection, ProviderGrid, FormSelect } from '@/components/integrations/IntegrationCard';
 import { IntegrationPageLayout } from '@/components/integrations/IntegrationPageLayout';
 import { useIntegrationConnect } from '@/components/integrations/useIntegrationConnect';
 import type { IntegrationProvider } from '@/components/integrations/IntegrationCard';
@@ -102,10 +102,6 @@ const AutomationIntegration = () => {
   const { isConnecting, connect } = useIntegrationConnect();
   const [webhookUrl, setWebhookUrl] = useState('');
 
-  const handleConnect = async (provider: AutomationProvider) => {
-    await connect(provider.name, { provider: provider.id, category: 'automation' });
-  };
-
   const handleTemplateSetup = async (template: (typeof automationTemplates)[number]) => {
     try {
       if (!supabase) throw new Error('Service unavailable');
@@ -154,25 +150,12 @@ const AutomationIntegration = () => {
       iconGradient="from-amber-600/10 to-amber-600/5"
       iconColor="text-amber-800"
     >
-      {/* Automation Providers */}
-      <div className="grid gap-6 md:grid-cols-2">
-        {automationProviders.map((provider) => (
-          <IntegrationCard
-            key={provider.id}
-            provider={provider}
-            dimmed={provider.status === 'coming-soon'}
-            extraBadge={<Badge className={`mt-2 ${provider.color}`}>{provider.pricing}</Badge>}
-            footer={
-              <ConnectButton
-                providerName={provider.name}
-                isConnecting={isConnecting}
-                onClick={() => handleConnect(provider)}
-                comingSoon={provider.status === 'coming-soon'}
-              />
-            }
-          />
-        ))}
-      </div>
+      <ProviderGrid
+        providers={automationProviders}
+        isConnecting={isConnecting}
+        onConnect={(provider) => connect(provider.name, { provider: provider.id, category: 'automation' })}
+        renderExtraBadge={(p) => <Badge className={`mt-2 ${p.color}`}>{p.pricing}</Badge>}
+      />
 
       {/* Webhook Configuration */}
       <SettingsSection
@@ -202,24 +185,16 @@ const AutomationIntegration = () => {
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="events">Trigger Events</Label>
-            <select id="events" className="w-full p-2 rounded-md border border-input bg-background">
-              <option>All events</option>
-              <option>Call completed</option>
-              <option>Call missed</option>
-              <option>Lead qualified</option>
-              <option>Appointment requested</option>
-            </select>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="format">Data Format</Label>
-            <select id="format" className="w-full p-2 rounded-md border border-input bg-background">
-              <option>JSON</option>
-              <option>Form data</option>
-              <option>XML</option>
-            </select>
-          </div>
+          <FormSelect
+            id="events"
+            label="Trigger Events"
+            options={['All events', 'Call completed', 'Call missed', 'Lead qualified', 'Appointment requested']}
+          />
+          <FormSelect
+            id="format"
+            label="Data Format"
+            options={['JSON', 'Form data', 'XML']}
+          />
         </div>
       </SettingsSection>
 
