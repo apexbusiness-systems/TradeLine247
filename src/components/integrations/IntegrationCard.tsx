@@ -110,6 +110,8 @@ interface SettingsSectionProps {
   contentClassName?: string;
   /** Extra className on outermost Card */
   className?: string;
+  /** When provided, renders a save button at the bottom of the section. */
+  saveLabel?: string;
 }
 
 export function SettingsSection({
@@ -119,6 +121,7 @@ export function SettingsSection({
   children,
   contentClassName = 'space-y-6',
   className = '',
+  saveLabel,
 }: SettingsSectionProps) {
   return (
     <Card
@@ -133,7 +136,10 @@ export function SettingsSection({
         </CardTitle>
         <p className="text-sm text-muted-foreground">{description}</p>
       </CardHeader>
-      <CardContent className={`relative z-10 ${contentClassName}`}>{children}</CardContent>
+      <CardContent className={`relative z-10 ${contentClassName}`}>
+        {children}
+        {saveLabel && <Button className="w-full md:w-auto">{saveLabel}</Button>}
+      </CardContent>
     </Card>
   );
 }
@@ -254,6 +260,26 @@ export function FormSelect({ id, label, options }: FormSelectProps) {
       <select id={id} className="w-full p-2 rounded-md border border-input bg-background">
         {options.map((opt) => <option key={opt}>{opt}</option>)}
       </select>
+    </div>
+  );
+}
+
+/**
+ * Two-column grid of FormSelects (and optional extra children).
+ * Eliminates the repeated `<div className="grid gap-4 md:grid-cols-2">` + FormSelect pattern.
+ */
+interface FormSelectRowProps {
+  selects: FormSelectProps[];
+  children?: React.ReactNode;
+}
+
+export function FormSelectRow({ selects, children }: FormSelectRowProps) {
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      {selects.map((props) => (
+        <FormSelect key={props.id} {...props} />
+      ))}
+      {children}
     </div>
   );
 }

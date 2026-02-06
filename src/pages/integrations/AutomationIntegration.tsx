@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Zap, Settings, Play, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { SettingsSection, ProviderGrid, FormSelect } from '@/components/integrations/IntegrationCard';
+import { SettingsSection, ProviderGrid, FormSelectRow } from '@/components/integrations/IntegrationCard';
 import { IntegrationPageLayout } from '@/components/integrations/IntegrationPageLayout';
 import { useIntegrationConnect } from '@/components/integrations/useIntegrationConnect';
 import type { IntegrationProvider } from '@/components/integrations/IntegrationCard';
@@ -184,18 +184,12 @@ const AutomationIntegration = () => {
           </p>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <FormSelect
-            id="events"
-            label="Trigger Events"
-            options={['All events', 'Call completed', 'Call missed', 'Lead qualified', 'Appointment requested']}
-          />
-          <FormSelect
-            id="format"
-            label="Data Format"
-            options={['JSON', 'Form data', 'XML']}
-          />
-        </div>
+        <FormSelectRow
+          selects={[
+            { id: 'events', label: 'Trigger Events', options: ['All events', 'Call completed', 'Call missed', 'Lead qualified', 'Appointment requested'] },
+            { id: 'format', label: 'Data Format', options: ['JSON', 'Form data', 'XML'] },
+          ]}
+        />
       </SettingsSection>
 
       {/* Automation Templates */}

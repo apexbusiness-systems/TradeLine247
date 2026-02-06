@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { MessageSquare, ExternalLink, Settings, Zap } from 'lucide-react';
 import { toast } from 'sonner';
-import { SettingsSection, ProviderGrid, FormSelect } from '@/components/integrations/IntegrationCard';
+import { SettingsSection, ProviderGrid, FormSelectRow } from '@/components/integrations/IntegrationCard';
 import { IntegrationPageLayout } from '@/components/integrations/IntegrationPageLayout';
 import { useIntegrationConnect } from '@/components/integrations/useIntegrationConnect';
 import type { IntegrationProvider } from '@/components/integrations/IntegrationCard';
@@ -131,19 +130,14 @@ const MessagingIntegration = () => {
         icon={Zap}
         title="Auto-Response Settings"
         description="Configure automated responses across all messaging platforms"
+        saveLabel="Save Auto-Response Settings"
       >
-        <div className="grid gap-4 md:grid-cols-2">
-          <FormSelect
-            id="response-delay"
-            label="Response Delay"
-            options={['Immediate', '30 seconds', '1 minute', '2 minutes']}
-          />
-          <FormSelect
-            id="business-hours"
-            label="Business Hours Only"
-            options={['Yes', 'No', 'Custom schedule']}
-          />
-        </div>
+        <FormSelectRow
+          selects={[
+            { id: 'response-delay', label: 'Response Delay', options: ['Immediate', '30 seconds', '1 minute', '2 minutes'] },
+            { id: 'business-hours', label: 'Business Hours Only', options: ['Yes', 'No', 'Custom schedule'] },
+          ]}
+        />
 
         <div className="space-y-2">
           <Label htmlFor="auto-message">Default Auto-Reply Message</Label>
@@ -166,7 +160,6 @@ const MessagingIntegration = () => {
           </p>
         </div>
 
-        <Button className="w-full md:w-auto">Save Auto-Response Settings</Button>
       </SettingsSection>
     </IntegrationPageLayout>
   );
