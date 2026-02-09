@@ -137,7 +137,7 @@
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^1.1.2",
     "dotenv": "16.4.5",
-    "helmet": "7.1.0",
+    "helmet": "8.1.0",
     "openai": "6.16.0",
     "twilio": "5.12.1",
     "ws": "^8.17.1",
