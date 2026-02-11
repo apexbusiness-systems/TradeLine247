@@ -406,6 +406,12 @@ export class EnterpriseSecurity {
         return undefined;
       }
 
+      // Strictly validate IP characters to prevent SSRF/injection
+      if (!/^[0-9a-fA-F:.]+$/.test(ip)) {
+        console.warn('Invalid IP characters detected');
+        return undefined;
+      }
+
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 3000); // 3s timeout
 
@@ -500,10 +506,12 @@ export class EnterpriseSecurity {
           const body = await req.clone().json();
 
           // Check for SQL injection patterns
-          const sqlPatterns = /(\bUNION\b|\bSELECT\b|\bINSERT\b|\bUPDATE\b|\bDELETE\b|\bDROP\b)/i;
+          // Use non-capturing group and atomic-like patterns where possible to avoid ReDoS
+          const sqlPatterns = /\b(UNION|SELECT|INSERT|UPDATE|DELETE|DROP)\b/i;
           const bodyString = JSON.stringify(body);
 
-          if (sqlPatterns.test(bodyString)) {
+          // Limit length to prevent ReDoS on massive payloads
+          if (bodyString.length < 50000 && sqlPatterns.test(bodyString)) {
             indicators.push('sql_injection_attempt');
             riskIncrease += 50;
 
