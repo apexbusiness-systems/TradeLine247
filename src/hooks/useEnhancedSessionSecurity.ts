@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 /**
- * Example hook that enforces session timeouts, activity tracking, etc.
- * Fix: memoize functions referenced in effects and include them in deps.
+ * Hook that enforces session timeouts and activity tracking.
+ * Functions are memoized and included in effect dependency arrays.
  */
 
 type SecurityOptions = {

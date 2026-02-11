@@ -30,6 +30,7 @@ export const paths = {
   voiceSettings: "/ops/voice",
   messagingHealth: "/ops/messaging-health",
   voiceHealth: "/ops/voice-health",
+  omniportHealth: "/ops/omniport-health",
   twilioEvidence: "/ops/twilio-evidence",
   voiceMonitoring: "/internal/voice-monitoring",
   notFound: "*",

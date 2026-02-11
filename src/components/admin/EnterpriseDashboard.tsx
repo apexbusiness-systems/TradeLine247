@@ -277,36 +277,29 @@ export function EnterpriseDashboard({ organizationId }: EnterpriseDashboardProps
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-6">
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium">Call Resolution Rate</span>
-                    <span className="text-sm text-muted-foreground">87%</span>
-                  </div>
-                  <Progress value={87} />
+              {kpis.length > 0 ? (
+                <div className="space-y-6">
+                  {kpis.map((kpi, index) => {
+                    const numericValue = typeof kpi.value === 'string'
+                      ? parseFloat(kpi.value.replace(/[^0-9.]/g, ''))
+                      : Number(kpi.value);
+                    const progressValue = Math.min(100, Math.max(0, numericValue || 0));
+                    return (
+                      <div key={index}>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-medium">{kpi.label}</span>
+                          <span className="text-sm text-muted-foreground">{kpi.value}</span>
+                        </div>
+                        <Progress value={progressValue} />
+                      </div>
+                    );
+                  })}
                 </div>
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium">Booking Completion</span>
-                    <span className="text-sm text-muted-foreground">72%</span>
-                  </div>
-                  <Progress value={72} />
-                </div>
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium">Customer Satisfaction</span>
-                    <span className="text-sm text-muted-foreground">94%</span>
-                  </div>
-                  <Progress value={94} />
-                </div>
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium">AI Response Accuracy</span>
-                    <span className="text-sm text-muted-foreground">91%</span>
-                  </div>
-                  <Progress value={91} />
-                </div>
-              </div>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-8">
+                  No analytics data available yet
+                </p>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

@@ -25,8 +25,25 @@ export async function synthesizeEmpatheticSpeech(
   baseResponse: string,
   options?: VoiceOptions
 ): Promise<{ voice: VoiceResponse; sentiment: SentimentResult; text: string }> {
-  const { sentiment, empatheticText } = buildEmpatheticText(transcript, baseResponse);
-  const voice = await generateSpeech(empatheticText, options);
+  let empatheticText: string;
+  let sentiment: SentimentResult;
+
+  try {
+    ({ sentiment, empatheticText } = buildEmpatheticText(transcript, baseResponse));
+  } catch (error) {
+    throw new Error(
+      `Sentiment analysis failed: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+
+  let voice: VoiceResponse;
+  try {
+    voice = await generateSpeech(empatheticText, options);
+  } catch (error) {
+    throw new Error(
+      `Speech synthesis failed: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+
   return { voice, sentiment, text: empatheticText };
 }
-

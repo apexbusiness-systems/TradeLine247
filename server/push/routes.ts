@@ -176,12 +176,16 @@ router.post('/test', pushLimiter, async (req: Request, res: Response) => {
       return res.status(401).json({ success: false, error: 'Unauthorized' });
     }
 
-    // TODO: Add admin role check here
-    // For now, allow any authenticated user (can be restricted later)
-    // const isAdmin = await checkAdminRole(auth.userId);
-    // if (!isAdmin) {
-    //   return res.status(403).json({ success: false, error: 'Forbidden' });
-    // }
+    // Verify the user has admin privileges before allowing test pushes
+    const { data: roleRow } = await supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', auth.userId)
+      .single();
+
+    if (!roleRow || roleRow.role !== 'admin') {
+      return res.status(403).json({ success: false, error: 'Forbidden — admin role required' });
+    }
 
     const { userId: targetUserId, deviceId, title, body, data } = req.body;
 
