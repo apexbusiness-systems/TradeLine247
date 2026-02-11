@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
  * Production Readiness Rubric - 10/10 Required
- * 
+ *
  * Evaluates the codebase against strict production standards.
  * All checks must pass for a 10/10 score.
  */
 
-import { execSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { access, constants } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -15,6 +15,11 @@ import { dirname, join } from 'node:path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const repoRoot = join(__dirname, '..');
+
+const ENCODING = 'utf-8';
+const CMD_NODE = 'node';
+const CMD_NPM = 'npm';
+const STDIO_PIPE = 'pipe';
 
 const checks = {
   build: { name: 'Production Build', passed: false, error: null },
@@ -58,12 +63,17 @@ async function checkRequiredFiles() {
 
 async function checkVercelPrebuild() {
   try {
-    const result = execSync('node scripts/check-required-files.mjs', {
+    const processResult = spawnSync(CMD_NODE, ['scripts/check-required-files.mjs'], {
       cwd: repoRoot,
-      encoding: 'utf-8',
-      stdio: 'pipe',
+      encoding: ENCODING,
+      stdio: STDIO_PIPE,
     });
-    if (result.includes('✅ All required files found')) {
+
+    if (processResult.error) throw processResult.error;
+    if (processResult.status !== 0) throw new Error(`Script failed with status ${processResult.status}`);
+
+    const result = processResult.stdout;
+    if (result && result.includes('✅ All required files found')) {
       return true;
     }
     checks.vercelPrebuild.error = 'Prebuild script did not pass';
@@ -76,23 +86,23 @@ async function checkVercelPrebuild() {
 
 function checkAccessibility() {
   try {
-    const authContent = readFileSync(join(repoRoot, 'src/pages/Auth.tsx'), 'utf-8');
+    const authContent = readFileSync(join(repoRoot, 'src/pages/Auth.tsx'), ENCODING);
     const hasH1 = authContent.includes('<h1') || authContent.includes('h1 className');
-    
-    const cssContent = readFileSync(join(repoRoot, 'src/index.css'), 'utf-8');
-    const hasDarkModeContrast = cssContent.includes('html.dark .text-primary') && 
+
+    const cssContent = readFileSync(join(repoRoot, 'src/index.css'), ENCODING);
+    const hasDarkModeContrast = cssContent.includes('html.dark .text-primary') &&
                                 cssContent.includes('#FF6B35');
-    
+
     if (!hasH1) {
       checks.accessibility.error = 'Auth page missing h1 heading';
       return false;
     }
-    
+
     if (!hasDarkModeContrast) {
       checks.accessibility.error = 'Missing dark mode color contrast fix';
       return false;
     }
-    
+
     return true;
   } catch (error) {
     checks.accessibility.error = error.message;
@@ -106,16 +116,16 @@ function checkWorkflowSyntax() {
       '.github/workflows/db-migrate.yml',
       '.github/workflows/db-repair.yml',
     ];
-    
+
     for (const workflow of workflows) {
-      const content = readFileSync(join(repoRoot, workflow), 'utf-8');
+      const content = readFileSync(join(repoRoot, workflow), ENCODING);
       // Check for common YAML issues
       if (content.includes('env: {') && !content.includes('env:\n')) {
         checks.workflowSyntax.error = `${workflow} uses inline object syntax (should be multi-line)`;
         return false;
       }
     }
-    
+
     return true;
   } catch (error) {
     checks.workflowSyntax.error = error.message;
@@ -125,19 +135,19 @@ function checkWorkflowSyntax() {
 
 function checkSecurity() {
   try {
-    const vercelJson = JSON.parse(readFileSync(join(repoRoot, 'vercel.json'), 'utf-8'));
-    const hasSecurityHeaders = vercelJson.headers && 
-                               vercelJson.headers.some(h => 
-                                 h.headers?.some(header => 
+    const vercelJson = JSON.parse(readFileSync(join(repoRoot, 'vercel.json'), ENCODING));
+    const hasSecurityHeaders = vercelJson.headers &&
+                               vercelJson.headers.some(h =>
+                                 h.headers?.some(header =>
                                    header.key === 'X-Content-Type-Options'
                                  )
                                );
-    
+
     if (!hasSecurityHeaders) {
       checks.security.error = 'Missing security headers in vercel.json';
       return false;
     }
-    
+
     return true;
   } catch (error) {
     checks.security.error = error.message;
@@ -157,13 +167,28 @@ async function runCheck(name, fn) {
   }
 }
 
-async function runCommandCheck(name, command, successIndicator) {
+async function runCommandCheck(name, command, args, successIndicator) {
   try {
-    const result = execSync(command, {
+    const processResult = spawnSync(command, args, {
       cwd: repoRoot,
-      encoding: 'utf-8',
-      stdio: 'pipe',
+      encoding: ENCODING,
+      stdio: STDIO_PIPE,
     });
+
+    if (processResult.error) throw processResult.error;
+
+    // Check exit code first
+    if (processResult.status !== 0) {
+       // If stderr is available, use it for error message
+       const errorMessage = processResult.stderr ? processResult.stderr.trim() : `Command failed with status ${processResult.status}`;
+       throw new Error(errorMessage || 'Command failed');
+    }
+
+    const result = processResult.stdout;
+
+    // Handle case where result is null/undefined (failed spawn)
+    if (!result && result !== '') throw new Error('Command failed to produce output');
+
     const passed = successIndicator ? result.includes(successIndicator) : true;
     checks[name].passed = passed;
     if (!passed) {
@@ -187,23 +212,23 @@ async function main() {
   await runCheck('vercelPrebuild', checkVercelPrebuild);
 
   // 3. Build
-  await runCommandCheck('build', 'npm run build', 'built in');
+  await runCommandCheck('build', CMD_NPM, ['run', 'build'], 'built in');
 
   // 4. Type Check
-  await runCommandCheck('typecheck', 'npm run typecheck', '');
+  await runCommandCheck('typecheck', CMD_NPM, ['run', 'typecheck'], '');
 
   // 5. Lint
-  await runCommandCheck('lint', 'npm run lint', '[check-edge-imports]');
+  await runCommandCheck('lint', CMD_NPM, ['run', 'lint'], '[check-edge-imports]');
 
   // 6. Tests (non-blocking for now, but should pass)
   try {
-    await runCommandCheck('tests', 'npm run test:ci', '');
+    await runCommandCheck('tests', CMD_NPM, ['run', 'test:ci'], '');
   } catch {
     checks.tests.error = 'Tests failed - review required';
   }
 
   // 7. Console Errors
-  await runCommandCheck('noConsoleErrors', 'npm run verify:console', '✅');
+  await runCommandCheck('noConsoleErrors', CMD_NPM, ['run', 'verify:console'], '✅');
 
   // 8. Accessibility
   await runCheck('accessibility', checkAccessibility);
@@ -245,5 +270,3 @@ main().catch((error) => {
   console.error('Fatal error:', error);
   process.exit(1);
 });
-
-
