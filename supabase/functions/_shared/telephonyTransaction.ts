@@ -2,11 +2,23 @@
 // Provides atomic multi-step operations with rollback
 
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { releaseNumber, closeSubaccount, TwilioAuth } from "./twilio.ts";
+
+export type RollbackActionType =
+  | 'release_number'
+  | 'close_subaccount'
+  | 'delete_supabase_row'
+  | 'update_supabase_row';
+
+export interface RollbackAction {
+  type: RollbackActionType;
+  payload: any;
+}
 
 export interface TransactionStep {
   step: string;
   data: any;
-  rollbackAction?: any;
+  rollbackAction?: RollbackAction;
 }
 
 export class TelephonyTransaction {
@@ -112,7 +124,7 @@ export class TelephonyTransaction {
   /**
    * Rollback the transaction
    */
-  async rollback(): Promise<any[]> {
+  async rollback(): Promise<RollbackAction[]> {
     if (!this.txId) {
       throw new Error('Transaction not started');
     }
@@ -127,7 +139,80 @@ export class TelephonyTransaction {
     }
 
     console.log(`Transaction rolled back: ${this.txId}`);
-    return data as any[];
+    return data as RollbackAction[];
+  }
+
+  /**
+   * Process a single rollback action
+   */
+  async processRollbackAction(action: RollbackAction): Promise<void> {
+    console.log(`Processing rollback action: ${action.type}`, action.payload);
+
+    try {
+      switch (action.type) {
+        case 'release_number': {
+          const { subSid, phoneNumberSid, accountSid, authToken } = action.payload;
+          if (!subSid || !phoneNumberSid) throw new Error('Missing payload for release_number');
+
+          const auth: TwilioAuth = {
+            accountSid: accountSid || Deno.env.get("TWILIO_ACCOUNT_SID") || "",
+            authToken: authToken || Deno.env.get("TWILIO_AUTH_TOKEN") || ""
+          };
+
+          if (!auth.accountSid || !auth.authToken) {
+            throw new Error('Twilio credentials missing for rollback');
+          }
+
+          await releaseNumber(auth, subSid, phoneNumberSid);
+          break;
+        }
+        case 'close_subaccount': {
+          const { subSid, accountSid, authToken } = action.payload;
+          if (!subSid) throw new Error('Missing subSid for close_subaccount');
+
+          const auth: TwilioAuth = {
+            accountSid: accountSid || Deno.env.get("TWILIO_ACCOUNT_SID") || "",
+            authToken: authToken || Deno.env.get("TWILIO_AUTH_TOKEN") || ""
+          };
+
+          await closeSubaccount(auth, subSid);
+          break;
+        }
+        case 'delete_supabase_row': {
+          const { table, filter } = action.payload;
+          if (!table || !filter || !filter.column || !filter.value) {
+            throw new Error('Invalid payload for delete_supabase_row');
+          }
+
+          const { error } = await this.supabase
+            .from(table)
+            .delete()
+            .eq(filter.column, filter.value);
+
+          if (error) throw error;
+          break;
+        }
+        case 'update_supabase_row': {
+          const { table, data, filter } = action.payload;
+          if (!table || !data || !filter || !filter.column || !filter.value) {
+            throw new Error('Invalid payload for update_supabase_row');
+          }
+
+          const { error } = await this.supabase
+            .from(table)
+            .update(data)
+            .eq(filter.column, filter.value);
+
+          if (error) throw error;
+          break;
+        }
+        default:
+          console.warn(`Unknown rollback action type: ${(action as any).type}`);
+      }
+    } catch (error) {
+      console.error(`Failed to execute rollback action ${action.type}:`, error);
+      throw error;
+    }
   }
 
   /**
@@ -156,7 +241,15 @@ export class TelephonyTransaction {
       try {
         const rollbackActions = await tx.rollback();
         console.log('Rollback actions to execute:', rollbackActions);
-        // TODO: Execute rollback actions (delete resources, etc.)
+
+        for (const action of rollbackActions) {
+          try {
+            await tx.processRollbackAction(action);
+          } catch (e) {
+            console.error(`Rollback action failed:`, e);
+            // Continue with other actions despite failure
+          }
+        }
       } catch (rollbackError) {
         console.error('Rollback failed:', rollbackError);
       }
