@@ -60,52 +60,18 @@ const phoneApps = [
 export default function PhoneApps() {
   const { toast } = useToast();
 
-  const downloadVCard = () => {
-    const vcard = [
-      'BEGIN:VCARD',
-      'VERSION:3.0',
-      'FN:TradeLine 24/7',
-      'ORG:TradeLine 24/7 AI',
-      'TEL;TYPE=WORK,VOICE:+14319900222',
-      'EMAIL:support@tradeline247.ai',
-      'URL:https://tradeline247ai.com',
-      'END:VCARD',
-    ].join('\n');
-    const blob = new Blob([vcard], { type: 'text/vcard' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'TradeLine247.vcf';
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const addCalendarEvent = () => {
-    const start = new Date();
-    start.setDate(start.getDate() + 1);
-    start.setHours(10, 0, 0, 0);
-    const end = new Date(start);
-    end.setHours(10, 30, 0, 0);
-    const fmt = (d: Date) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
-    const gcalUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent('TradeLine 24/7 Follow-up')}&dates=${fmt(start)}/${fmt(end)}&details=${encodeURIComponent('Follow-up call with TradeLine 24/7 AI')}`;
-    window.open(gcalUrl, '_blank');
-  };
-
   const handleAppAction = (app: typeof phoneApps[0]) => {
     try {
-      if (app.id === 'contacts') {
-        downloadVCard();
-        toast({ title: 'Contact Saved', description: 'TradeLine 24/7 contact card downloaded' });
-        return;
-      }
-
-      if (app.id === 'calendar') {
-        addCalendarEvent();
-        toast({ title: 'Calendar', description: 'Opening calendar to create event...' });
-        return;
-      }
-
       const url = app.action(app.defaultNumber || '');
+
+      if (app.id === 'contacts' || app.id === 'calendar') {
+        toast({
+          title: "Feature Coming Soon",
+          description: `${app.title} integration will be available soon`
+        });
+        return;
+      }
+
       window.location.href = url;
 
       toast({

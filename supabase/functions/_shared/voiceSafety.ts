@@ -108,8 +108,8 @@ export function performSafetyCheck(
   // Check conversation limits
   if (conversationMetadata) {
     if (config.max_conversation_time_seconds &&
-      conversationMetadata.duration_seconds &&
-      conversationMetadata.duration_seconds > config.max_conversation_time_seconds) {
+        conversationMetadata.duration_seconds &&
+        conversationMetadata.duration_seconds > config.max_conversation_time_seconds) {
       return {
         safe: false,
         action: 'escalate',
@@ -119,8 +119,8 @@ export function performSafetyCheck(
     }
 
     if (config.max_turns &&
-      conversationMetadata.turn_count &&
-      conversationMetadata.turn_count > config.max_turns) {
+        conversationMetadata.turn_count &&
+        conversationMetadata.turn_count > config.max_turns) {
       return {
         safe: false,
         action: 'escalate',
@@ -137,7 +137,7 @@ export function performSafetyCheck(
 
     // Check negative sentiment threshold
     if (config.sentiment_threshold_negative !== undefined &&
-      sentimentScore < config.sentiment_threshold_negative) {
+        sentimentScore < config.sentiment_threshold_negative) {
       return {
         safe: true,
         action: 'escalate',
@@ -156,23 +156,14 @@ export function performSafetyCheck(
   };
 }
 
-// Sanitize text for logging (remove PII and prevent log injection)
+// Sanitize text for logging (remove PII)
 export function sanitizeForLogging(text: string): string {
-  // Clamp input length to avoid regex backtracking/DoS on extremely long payloads
-  const MAX_LENGTH = 5000;
-  const truncated = text.length > MAX_LENGTH ? text.slice(0, MAX_LENGTH) : text;
-
-  // SECURITY: Remove newlines and carriage returns to prevent log injection
-  // This prevents malicious users from forging log entries with \n or \r characters
-  let sanitized = truncated.replaceAll(/[\n\r]+/g, " ");
   // Remove phone numbers (E.164 format)
-  sanitized = sanitized.replaceAll(/\+\d{10,15}/g, '[PHONE]');
+  let sanitized = text.replace(/\+\d{10,15}/g, '[PHONE]');
   // Remove email addresses
-  // Bounded patterns to prevent super-linear backtracking
-  const emailPattern = /\b[a-zA-Z0-9._%+-]{1,64}@[a-zA-Z0-9-]{1,63}(?:\.[a-zA-Z0-9-]{2,63}){1,4}\b/g;
-  sanitized = sanitized.replaceAll(emailPattern, '[EMAIL]');
+  sanitized = sanitized.replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, '[EMAIL]');
   // Remove credit card patterns (basic)
-  sanitized = sanitized.replaceAll(/\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/g, '[CARD]');
+  sanitized = sanitized.replace(/\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/g, '[CARD]');
   return sanitized;
 }
 

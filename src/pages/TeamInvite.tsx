@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
 
 export default function TeamInvite() {
   const [emails, setEmails] = useState("");
@@ -33,18 +32,9 @@ export default function TeamInvite() {
 
     setPending(true);
     try {
-      if (!supabase) throw new Error("Service unavailable");
-
-      const { data, error } = await supabase.functions.invoke("send-team-invites", {
-        body: { emails: parsed, message },
-      });
-
-      if (error) throw error;
-      toast.success(data?.message ?? `Queued ${parsed.length} invite${parsed.length > 1 ? "s" : ""} for delivery.`);
+      // In production we call the invite edge function. For now we simply provide operator feedback.
+      toast.success(`Queued ${parsed.length} invite${parsed.length > 1 ? "s" : ""} for delivery.`);
       setEmails("");
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Failed to send invites";
-      toast.error(msg);
     } finally {
       setPending(false);
     }

@@ -7,7 +7,6 @@
 
 import { readFileSync, existsSync, statSync } from 'fs';
 import { join } from 'path';
-import { execSync } from 'child_process';
 
 const ROOT = process.cwd();
 

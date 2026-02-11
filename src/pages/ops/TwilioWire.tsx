@@ -21,8 +21,8 @@ export default function TwilioWire() {
   const productionUrl = 'https://hysvqdwmhxnblxfqnszn.supabase.co';
 
   const getWebhookUrls = (env: 'staging' | 'production') => ({
-    voice_frontdoor: `${env === 'staging' ? stagingUrl : productionUrl}/functions/v1/voice-frontdoor`,
-    voice_status: `${env === 'staging' ? stagingUrl : productionUrl}/functions/v1/voice-action`,
+    voice_answer: `${env === 'staging' ? stagingUrl : productionUrl}/functions/v1/voice-answer`,
+    voice_status: `${env === 'staging' ? stagingUrl : productionUrl}/functions/v1/voice-status`,
     sms_inbound: `${env === 'staging' ? stagingUrl : productionUrl}/functions/v1/sms-inbound`,
   });
 
@@ -64,7 +64,7 @@ export default function TwilioWire() {
       const { error } = await supabase.functions.invoke('ops-twilio-configure-webhooks', {
         body: {
           phoneNumber: selectedNumber,
-          voiceUrl: WEBHOOK_URLS.voice_frontdoor,
+          voiceUrl: WEBHOOK_URLS.voice_answer,
           voiceStatusCallback: WEBHOOK_URLS.voice_status,
           smsUrl: WEBHOOK_URLS.sms_inbound
         }
@@ -92,7 +92,7 @@ export default function TwilioWire() {
   const testWebhook = async (type: 'voice' | 'sms') => {
     setTesting(true);
     try {
-      const url = type === 'voice' ? WEBHOOK_URLS.voice_frontdoor : WEBHOOK_URLS.sms_inbound;
+      const url = type === 'voice' ? WEBHOOK_URLS.voice_answer : WEBHOOK_URLS.sms_inbound;
       
       const { error } = await supabase.functions.invoke('ops-twilio-test-webhook', {
         body: { url, type }
