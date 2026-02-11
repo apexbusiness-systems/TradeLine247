@@ -39,6 +39,5 @@ jobs:
           echo "🚀 Starting Stateless Migration..."
           echo "Supabase CLI version: $(supabase --version)"
 
-          # Explicitly pass the db-url flag if the env var isn't auto-picked up
           # Using --no-verify to skip local shadow DB creation if Docker is unavailable/flaky in CI
-          supabase db push --include-all --no-verify --db-url "$SUPABASE_DB_URL"
+          supabase db push --include-all --no-verify
