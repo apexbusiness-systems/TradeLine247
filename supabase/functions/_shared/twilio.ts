@@ -22,10 +22,9 @@ type TwilioPostOptions = {
   headers?: Record<string, string>;
 };
 
-export async function twilioRequest(
-  method: string,
+export async function twilioFormPOST(
   path: string,
-  body: URLSearchParams | null,
+  form: URLSearchParams,
   maxRetries = 4,
   opts: TwilioPostOptions = {},
 ) {
@@ -36,19 +35,14 @@ export async function twilioRequest(
   }
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    const headers: Record<string, string> = {
-      Authorization: authHeader,
-      ...opts.headers,
-    };
-
-    if (body) {
-      headers["Content-Type"] = "application/x-www-form-urlencoded";
-    }
-
     const res = await fetch(`${TWILIO_API_BASE}${path}`, {
-      method,
-      headers,
-      body,
+      method: "POST",
+      headers: {
+        Authorization: authHeader,
+        "Content-Type": "application/x-www-form-urlencoded",
+        ...opts.headers,
+      },
+      body: form,
     });
 
     if (res.status === 429 || res.status >= 500) {
@@ -63,16 +57,7 @@ export async function twilioRequest(
     return res;
   }
 
-  throw new Error("twilioRequest exhausted retries");
-}
-
-export async function twilioFormPOST(
-  path: string,
-  form: URLSearchParams,
-  maxRetries = 4,
-  opts: TwilioPostOptions = {},
-) {
-  return await twilioRequest("POST", path, form, maxRetries, opts);
+  throw new Error("twilioFormPOST exhausted retries");
 }
 
 export const okHeaders = { ...corsHeaders, ...secureHeaders, "Content-Type": "application/json" };
@@ -127,27 +112,5 @@ export async function buyNumberAndBindWebhooks(
   });
   const res = await twilioFormPOST(`/Accounts/${subSid}/IncomingPhoneNumbers.json`, body, 4, { auth });
   if (!res.ok) throw new Error(`Buy/bind number failed: ${res.status}`);
-  return await res.json();
-}
-
-export async function releaseNumber(
-  auth: TwilioAuth,
-  subSid: string,
-  phoneNumberSid: string,
-) {
-  const res = await twilioRequest("DELETE", `/Accounts/${subSid}/IncomingPhoneNumbers/${phoneNumberSid}.json`, null, 4, { auth });
-  if (!res.ok && res.status !== 404) {
-    throw new Error(`Release number failed: ${res.status}`);
-  }
-  return res.status === 204 || res.status === 404; // Success if deleted or not found
-}
-
-export async function closeSubaccount(
-  auth: TwilioAuth,
-  subSid: string,
-) {
-  const body = new URLSearchParams({ Status: "suspended" });
-  const res = await twilioFormPOST(`/Accounts/${subSid}.json`, body, 4, { auth });
-  if (!res.ok) throw new Error(`Close subaccount failed: ${res.status}`);
   return await res.json();
 }

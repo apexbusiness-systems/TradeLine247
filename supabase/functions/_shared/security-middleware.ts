@@ -140,7 +140,7 @@ export class EnterpriseSecurity {
 
       // 4. Geo-based Security (if enabled)
       if (options.enableGeoCheck) {
-        const geoData = await this.getGeoData(clientIP, req);
+        const geoData = await this.getGeoData(clientIP);
         context.geoData = geoData;
 
         // Check for suspicious locations
@@ -253,10 +253,8 @@ export class EnterpriseSecurity {
    * Validate IP address format
    */
   private isValidIP(ip: string): boolean {
-    if (!ip || ip.length > 45) return false;
-
-    // IPv4 - explicit structure to avoid ReDoS
-    const ipv4Regex = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/;
+    const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}$/;
+    const ipv6Regex = /^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$/;
 
     if (ipv4Regex.test(ip)) {
       return ip.split('.').every(part => {
@@ -265,9 +263,7 @@ export class EnterpriseSecurity {
       });
     }
 
-    // IPv6 - strict hex structure check
-    // Simple enough to avoid ReDoS but validates hex+colon only
-    return /^[0-9a-fA-F:]+$/.test(ip) && ip.includes(':');
+    return ipv6Regex.test(ip);
   }
 
   /**
@@ -378,85 +374,18 @@ export class EnterpriseSecurity {
   /**
    * Geo-based security checks
    */
-  private async getGeoData(ip: string, req?: Request): Promise<GeoData | undefined> {
-    // 1. Try Cloudflare headers first (most reliable/fastest if available)
-    if (req) {
-      const country = req.headers.get('cf-ipcountry');
-      if (country) {
-        // Try to get other CF headers if available, or default
-        const city = req.headers.get('cf-ipcity') || 'Unknown';
-        const region = req.headers.get('cf-region-code') || 'Unknown';
-        const lat = parseFloat(req.headers.get('cf-latitude') || '0');
-        const lon = parseFloat(req.headers.get('cf-longitude') || '0');
-        const timezone = req.headers.get('cf-timezone') || 'UTC';
-
-        return {
-          country,
-          region,
-          city,
-          latitude: isNaN(lat) ? 0 : lat,
-          longitude: isNaN(lon) ? 0 : lon,
-          timezone
-        };
-      }
-    }
-
-    // 2. Fallback to external GeoIP service (ipapi.co)
-    // Note: ipapi.co has a rate limit for free tier (1000/day) without key
-    // For production with high volume, consider getting an API key or using a paid provider
-    try {
-      // Validate IP format before calling
-      if (!this.isValidIP(ip) || ip === 'unknown' || ip === '127.0.0.1' || ip === 'localhost') {
-        return undefined;
-      }
-
-      // Strictly validate IP characters to prevent SSRF/injection
-      if (!/^[0-9a-fA-F:.]+$/.test(ip)) {
-        console.warn('Invalid IP characters detected');
-        return undefined;
-      }
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3s timeout
-
-      // Use explicit base URL and encoded component to prevent SSRF
-      const baseUrl = 'https://ipapi.co/';
-      const safeIp = encodeURIComponent(ip);
-      const url = new URL(`${safeIp}/json/`, baseUrl);
-
-      const response = await fetch(url.toString(), {
-        signal: controller.signal,
-        headers: { 'User-Agent': 'TradeLine247-Security/1.0' }
-      });
-
-      clearTimeout(timeoutId);
-
-      if (response.ok) {
-        const data = await response.json();
-
-        // Check if error in response body (ipapi.co returns error: true)
-        if (data.error) {
-          console.warn(`GeoIP service error: ${data.reason}`);
-          return undefined;
-        }
-
-        return {
-          country: data.country_code || data.country || 'Unknown',
-          region: data.region_code || data.region || 'Unknown',
-          city: data.city || 'Unknown',
-          latitude: data.latitude || 0,
-          longitude: data.longitude || 0,
-          timezone: data.timezone || 'UTC'
-        };
-      } else {
-        console.warn(`GeoIP service failed: ${response.status} ${response.statusText}`);
-      }
-    } catch (error) {
-      // Don't fail the request if GeoIP lookup fails
-      console.warn('GeoIP lookup exception:', error);
-    }
-
-    return undefined;
+  private async getGeoData(ip: string): Promise<GeoData | undefined> {
+    // This would integrate with a GeoIP service like MaxMind
+    // Placeholder implementation
+    // TODO: Replace with actual GeoIP service integration that may throw errors
+    return {
+      country: 'US',
+      region: 'CA',
+      city: 'San Francisco',
+      latitude: 37.7749,
+      longitude: -122.4194,
+      timezone: 'America/Los_Ang_Angeles'
+    };
   }
 
   /**
@@ -512,48 +441,19 @@ export class EnterpriseSecurity {
           const body = await req.clone().json();
 
           // Check for SQL injection patterns
+          const sqlPatterns = /(\bUNION\b|\bSELECT\b|\bINSERT\b|\bUPDATE\b|\bDELETE\b|\bDROP\b)/i;
           const bodyString = JSON.stringify(body);
 
-          // Tokenize and check against keywords to avoid ReDoS entirely
-          if (bodyString.length < 50000) {
-            const upperBody = bodyString.toUpperCase();
-            const keywords = ['UNION', 'SELECT', 'INSERT', 'UPDATE', 'DELETE', 'DROP'];
+          if (sqlPatterns.test(bodyString)) {
+            indicators.push('sql_injection_attempt');
+            riskIncrease += 50;
 
-            // Simple string inclusion check is safer than regex for this purpose
-            // Note: This is a basic heuristic, not a full WAF
-            let hasSqlKeyword = false;
-
-            for (const keyword of keywords) {
-              let index = upperBody.indexOf(keyword);
-              while (index !== -1) {
-                // Check char before
-                const prevChar = index > 0 ? upperBody[index - 1] : ' ';
-                // Check char after
-                const nextChar = index + keyword.length < upperBody.length ? upperBody[index + keyword.length] : ' ';
-
-                const isWordBoundary = (char: string) => /[^A-Z0-9_]/.test(char);
-                if (isWordBoundary(prevChar) && isWordBoundary(nextChar)) {
-                  hasSqlKeyword = true;
-                  break;
-                }
-
-                // Find next occurrence
-                index = upperBody.indexOf(keyword, index + 1);
-              }
-              if (hasSqlKeyword) break;
-            }
-
-            if (hasSqlKeyword) {
-              indicators.push('sql_injection_attempt');
-              riskIncrease += 50;
-
-              await enterpriseMonitor.logSecurityEvent(
-                'suspicious_activity',
-                { pattern: 'sql_injection', body_preview: bodyString.substring(0, 200) },
-                context.userId,
-                'critical'
-              );
-            }
+            await enterpriseMonitor.logSecurityEvent(
+              'suspicious_activity',
+              { pattern: 'sql_injection', body_preview: bodyString.substring(0, 200) },
+              context.userId,
+              'critical'
+            );
           }
         }
       } catch (error) {

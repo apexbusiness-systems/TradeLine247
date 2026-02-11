@@ -18,12 +18,8 @@ import { featureFlags } from "./config/featureFlags";
 import "./i18n/config";
 import { detectSafeModeFromSearch } from "./lib/safeMode";
 import { initBackgroundSystem } from "./utils/backgroundSystem";
-import { initSentry } from "./lib/sentry";
 
 console.info('✅ Core modules loaded');
-
-// Initialize Sentry Monitoring
-initSentry();
 
 // H310-1: Dev-only error listener to capture React Error #310
 if (import.meta.env.DEV && featureFlags.H310_HARDENING) {

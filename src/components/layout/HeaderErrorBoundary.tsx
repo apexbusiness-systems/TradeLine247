@@ -1,6 +1,5 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
-import { reportReactError } from '@/lib/errorReporter';
 
 interface Props {
   children: ReactNode;
@@ -29,8 +28,10 @@ export class HeaderErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('[HeaderErrorBoundary] Component stack:', errorInfo.componentStack);
-    // Report to centralized error handler (handles dev/prod logging and backend reporting)
-    reportReactError(error, errorInfo);
+    // Log to error tracking service in production
+    if (import.meta.env.PROD) {
+      // TODO: Send to error tracking service (Sentry, etc.)
+    }
   }
 
   render() {
