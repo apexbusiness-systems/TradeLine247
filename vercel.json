@@ -10,10 +10,11 @@
         { "key": "X-Content-Type-Options", "value": "nosniff" },
         { "key": "Strict-Transport-Security", "value": "max-age=31536000; includeSubDomains" },
         { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
-        { "key": "Permissions-Policy", "value": "camera=(), microphone=(self), geolocation=()" },
+        { "key": "Cross-Origin-Opener-Policy", "value": "same-origin" },
+        { "key": "Permissions-Policy", "value": "camera=(), microphone=(self), geolocation=(), cross-origin-isolated=()" },
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https: blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.twilio.com https://api.openai.com https://api.resend.com; frame-ancestors 'none';"
+          "value": "default-src 'self'; script-src 'self' 'sha256-bEYd+LcPU/Dqb4kw607DQuDe9kNSphboAGFc3Ul1uuw=' 'sha256-9Aqd12dpUmJ8nvOhKo6BKuIm5kPY076PTKodUHr1Xp0=' 'sha256-ohy8JqHAxQp7V6CSEzAslHs6cy8SGyUNxPE/Oo7yu4A=' https://static.klaviyo.com https://www.googletagmanager.com https://www.google-analytics.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https: blob:; media-src 'self' data: blob:; connect-src 'self' https://hysvqdwmhxnblxfqnszn.supabase.co wss://hysvqdwmhxnblxfqnszn.supabase.co https://api.twilio.com https://api.openai.com https://api.resend.com https://www.google-analytics.com https://*.klaviyo.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self';"
         }
       ]
     }
