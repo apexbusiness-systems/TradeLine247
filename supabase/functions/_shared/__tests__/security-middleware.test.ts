@@ -1,5 +1,6 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach, beforeAll } from 'vitest';
+import { enterpriseMonitor } from '../enterprise-monitoring.ts';
 
 // Mock supabase client
 const createMockChain = () => {
@@ -141,5 +142,36 @@ describe('EnterpriseSecurity - GeoIP', () => {
     });
 
     expect(context.geoData).toBeUndefined();
+  });
+
+  it('should detect SQL injection even with safe prefix words', async () => {
+    // Tests regression fix for "SELECTION SELECT" vulnerability
+    const req = new Request('https://example.com', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-forwarded-for': '1.2.3.4'
+      },
+      body: JSON.stringify({
+        query: "This is a SELECTION of items UNION SELECT * FROM users"
+      })
+    });
+
+    try {
+      await enterpriseSecurity.performSecurityCheck(req, {
+        enableFraudDetection: true
+      });
+    } catch (e) {
+      // Expected to throw or at least flag it
+    }
+
+    expect(enterpriseMonitor.logSecurityEvent).toHaveBeenCalledWith(
+      'suspicious_activity',
+      expect.objectContaining({
+        pattern: 'sql_injection'
+      }),
+      undefined,
+      'critical'
+    );
   });
 });
