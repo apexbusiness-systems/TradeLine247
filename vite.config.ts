@@ -16,16 +16,17 @@ export default defineConfig(({ mode }: ConfigEnv) => ({
       name: 'csp-headers',
       configureServer(server: any) {
         server.middlewares.use((req: any, res: any, next: any) => {
-          // SECURITY: Removed 'unsafe-eval' to prevent arbitrary code execution
+          // SECURITY: Strict CSP matching production environment
           res.setHeader(
             'Content-Security-Policy',
             [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
+              "script-src 'self' 'sha256-bEYd+LcPU/Dqb4kw607DQuDe9kNSphboAGFc3Ul1uuw=' 'sha256-9Aqd12dpUmJ8nvOhKo6BKuIm5kPY076PTKodUHr1Xp0=' 'sha256-ohy8JqHAxQp7V6CSEzAslHs6cy8SGyUNxPE/Oo7yu4A=' https://static.klaviyo.com https://www.googletagmanager.com https://www.google-analytics.com",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-              "font-src 'self' https://fonts.gstatic.com",
-              "img-src 'self' data: https:",
-              "connect-src 'self' https://*.supabase.co https://api.openai.com https://api.twilio.com",
+              "font-src 'self' https://fonts.gstatic.com data:",
+              "img-src 'self' data: https: blob:",
+              "media-src 'self' data: blob:",
+              "connect-src 'self' https://hysvqdwmhxnblxfqnszn.supabase.co wss://hysvqdwmhxnblxfqnszn.supabase.co https://api.twilio.com https://api.openai.com https://api.resend.com https://www.google-analytics.com https://*.klaviyo.com",
               "frame-ancestors 'none'",
               "base-uri 'self'",
               "form-action 'self'"
