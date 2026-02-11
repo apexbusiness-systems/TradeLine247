@@ -140,7 +140,7 @@ export class EnterpriseSecurity {
 
       // 4. Geo-based Security (if enabled)
       if (options.enableGeoCheck) {
-        const geoData = await this.getGeoData(clientIP);
+        const geoData = await this.getGeoData(clientIP, req);
         context.geoData = geoData;
 
         // Check for suspicious locations
@@ -374,18 +374,74 @@ export class EnterpriseSecurity {
   /**
    * Geo-based security checks
    */
-  private async getGeoData(ip: string): Promise<GeoData | undefined> {
-    // This would integrate with a GeoIP service like MaxMind
-    // Placeholder implementation
-    // TODO: Replace with actual GeoIP service integration that may throw errors
-    return {
-      country: 'US',
-      region: 'CA',
-      city: 'San Francisco',
-      latitude: 37.7749,
-      longitude: -122.4194,
-      timezone: 'America/Los_Ang_Angeles'
-    };
+  private async getGeoData(ip: string, req?: Request): Promise<GeoData | undefined> {
+    // 1. Try Cloudflare headers first (most reliable/fastest if available)
+    if (req) {
+      const country = req.headers.get('cf-ipcountry');
+      if (country) {
+        // Try to get other CF headers if available, or default
+        const city = req.headers.get('cf-ipcity') || 'Unknown';
+        const region = req.headers.get('cf-region-code') || 'Unknown';
+        const lat = parseFloat(req.headers.get('cf-latitude') || '0');
+        const lon = parseFloat(req.headers.get('cf-longitude') || '0');
+        const timezone = req.headers.get('cf-timezone') || 'UTC';
+
+        return {
+          country,
+          region,
+          city,
+          latitude: isNaN(lat) ? 0 : lat,
+          longitude: isNaN(lon) ? 0 : lon,
+          timezone
+        };
+      }
+    }
+
+    // 2. Fallback to external GeoIP service (ipapi.co)
+    // Note: ipapi.co has a rate limit for free tier (1000/day) without key
+    // For production with high volume, consider getting an API key or using a paid provider
+    try {
+      // Validate IP format before calling
+      if (!this.isValidIP(ip) || ip === 'unknown' || ip === '127.0.0.1' || ip === 'localhost') {
+        return undefined;
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3s timeout
+
+      const response = await fetch(`https://ipapi.co/${ip}/json/`, {
+        signal: controller.signal,
+        headers: { 'User-Agent': 'TradeLine247-Security/1.0' }
+      });
+
+      clearTimeout(timeoutId);
+
+      if (response.ok) {
+        const data = await response.json();
+
+        // Check if error in response body (ipapi.co returns error: true)
+        if (data.error) {
+          console.warn(`GeoIP service error: ${data.reason}`);
+          return undefined;
+        }
+
+        return {
+          country: data.country_code || data.country || 'Unknown',
+          region: data.region_code || data.region || 'Unknown',
+          city: data.city || 'Unknown',
+          latitude: data.latitude || 0,
+          longitude: data.longitude || 0,
+          timezone: data.timezone || 'UTC'
+        };
+      } else {
+        console.warn(`GeoIP service failed: ${response.status} ${response.statusText}`);
+      }
+    } catch (error) {
+      // Don't fail the request if GeoIP lookup fails
+      console.warn('GeoIP lookup exception:', error);
+    }
+
+    return undefined;
   }
 
   /**
