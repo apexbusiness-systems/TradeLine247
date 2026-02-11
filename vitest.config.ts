@@ -21,6 +21,7 @@ export default defineConfig({
     include: [
       'src/**/*.{test,spec}.{ts,tsx}',
       'supabase/functions/_shared/**/*.test.ts',
+      'server/**/*.{test,spec}.{ts,tsx}',
     ],
     exclude: ['tests/**', 'node_modules/**'], // tests/** contains Playwright e2e tests only
     // Ensure Node.js built-ins and modules are available for tests
@@ -37,6 +38,7 @@ export default defineConfig({
     environmentVariables: {
       VITE_SUPABASE_URL: 'https://test-project.supabase.co',
       VITE_SUPABASE_ANON_KEY: 'test-anon-key-12345',
+      SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key-12345',
     },
     coverage: {
       provider: 'v8',
