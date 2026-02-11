@@ -5,7 +5,7 @@
  * Security: Server-side rate limiting, input validation, audit logging, RLS enforcement
  */
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient, SupabaseClient, User } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders, preflight } from '../_shared/cors.ts';
 import { normalizeTextForEmbedding } from '../_shared/textNormalization.ts';
 
@@ -22,7 +22,7 @@ function hasOwn(obj: AnyRecord, key: PropertyKey): boolean {
 
 /** Rate limiting check using database RPC */
 async function checkRateLimit(
-  supabase: any,
+  supabase: SupabaseClient,
   identifier: string,
   maxRequests: number,
   windowSeconds: number
@@ -52,6 +52,149 @@ async function checkRateLimit(
   }
 }
 
+function initSupabaseAdmin(): SupabaseClient {
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
+  if (!supabaseUrl || !supabaseServiceKey) {
+    throw new Error('Missing Supabase configuration');
+  }
+
+  return createClient(supabaseUrl, supabaseServiceKey);
+}
+
+async function enforceRateLimit(
+  supabaseAdmin: SupabaseClient,
+  req: Request
+): Promise<{ allowed: boolean; remaining: number; clientIP: string }> {
+  const clientIP = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+                   req.headers.get('x-real-ip') ||
+                   'unknown';
+  const rateLimitKey = `rag-search:${clientIP}`;
+
+  // Check rate limit: 60 requests per minute
+  const result = await checkRateLimit(supabaseAdmin, rateLimitKey, 60, 60);
+
+  if (!result.allowed) {
+    console.warn(`Rate limit exceeded for RAG search: ${clientIP}`);
+
+    // Log security event
+    await supabaseAdmin.from('analytics_events').insert({
+      event_type: 'rate_limit_exceeded',
+      event_data: {
+        endpoint: 'rag-search',
+        ip: clientIP,
+        remaining: result.remaining
+      },
+      ip_address: clientIP
+    });
+  }
+
+  return { ...result, clientIP };
+}
+
+async function authenticateUser(req: Request): Promise<{ user: User; supabaseUser: SupabaseClient } | null> {
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader) return null;
+
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+  const supabaseUser = createClient(supabaseUrl, supabaseServiceKey, {
+    global: { headers: { Authorization: authHeader } }
+  });
+
+  const { data: { user }, error } = await supabaseUser.auth.getUser();
+  if (error || !user) {
+    console.warn('Auth error:', error);
+    return null;
+  }
+
+  return { user, supabaseUser };
+}
+
+function resolveOrgId(body: AnyRecord, filters: AnyRecord, user: User): string | undefined {
+  if (typeof body.orgId === "string") {
+    return body.orgId;
+  }
+  if (typeof filters.org_id === "string") {
+    return filters.org_id;
+  }
+  if (user.app_metadata && typeof user.app_metadata.org_id === 'string') {
+    return user.app_metadata.org_id;
+  }
+  return undefined;
+}
+
+async function generateQueryEmbedding(text: string, lang?: string): Promise<number[]> {
+  const openaiKey = Deno.env.get('OPENAI_API_KEY');
+  if (!openaiKey) {
+    throw new Error('OPENAI_API_KEY not configured');
+  }
+
+  const { normalized } = normalizeTextForEmbedding(text, lang);
+
+  const embeddingResp = await fetch('https://api.openai.com/v1/embeddings', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${openaiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: 'text-embedding-3-small',
+      input: normalized,
+      dimensions: 1536
+    })
+  });
+
+  if (!embeddingResp.ok) {
+    const errText = await embeddingResp.text();
+    console.error('OpenAI API Error:', errText);
+    throw new Error(`OpenAI API error: ${errText}`);
+  }
+
+  const embeddingData = await embeddingResp.json();
+  return embeddingData.data[0].embedding;
+}
+
+async function executeSearch(
+  supabaseUser: SupabaseClient,
+  orgId: string,
+  user: User,
+  embedding: number[],
+  matchCount: number,
+  threshold: number
+): Promise<any[]> {
+  // Run parallel searches
+  const [emailResults, callResults] = await Promise.all([
+    supabaseUser.rpc('match_email_chunks', {
+      query_org_id: orgId,
+      query_user_id: user.id,
+      query_embedding: JSON.stringify(embedding),
+      match_count: matchCount,
+      similarity_threshold: threshold
+    }),
+    supabaseUser.rpc('match_call_chunks', {
+      query_org_id: orgId,
+      query_embedding: JSON.stringify(embedding),
+      match_count: matchCount,
+      similarity_threshold: threshold
+    })
+  ]);
+
+  if (emailResults.error) {
+    console.warn('Email search RPC error:', emailResults.error);
+  }
+  if (callResults.error) {
+    console.warn('Call search RPC error:', callResults.error);
+  }
+
+  return [
+    ...(emailResults.data || []).map((r: any) => ({ ...r, type: 'email' })),
+    ...(callResults.data || []).map((r: any) => ({ ...r, type: 'call' }))
+  ].sort((a: any, b: any) => b.similarity - a.similarity).slice(0, matchCount);
+}
+
 async function handleRagSearch(req: Request): Promise<Response> {
   const pf = preflight(req);
   if (pf) return pf;
@@ -59,82 +202,33 @@ async function handleRagSearch(req: Request): Promise<Response> {
   if (req.method !== 'POST') {
     return new Response(
       JSON.stringify({ ok: false, error: 'Method not allowed. Use POST.' }),
-      { 
-        status: 405, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      }
+      { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 
   try {
-    // Initialize Supabase Admin client (for rate limiting)
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const supabaseAdmin = initSupabaseAdmin();
+    const { allowed, remaining, clientIP } = await enforceRateLimit(supabaseAdmin, req);
     
-    if (!supabaseUrl || !supabaseServiceKey) {
-      throw new Error('Missing Supabase configuration');
-    }
-
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
-
-    // Get client identifier for rate limiting
-    const clientIP = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 
-                     req.headers.get('x-real-ip') || 
-                     'unknown';
-    const rateLimitKey = `rag-search:${clientIP}`;
-
-    // Check rate limit: 60 requests per minute
-    const rateLimitResult = await checkRateLimit(supabaseAdmin, rateLimitKey, 60, 60);
-    
-    if (!rateLimitResult.allowed) {
-      console.warn(`Rate limit exceeded for RAG search: ${clientIP}`);
-      
-      // Log security event
-      await supabaseAdmin.from('analytics_events').insert({
-        event_type: 'rate_limit_exceeded',
-        event_data: { 
-          endpoint: 'rag-search',
-          ip: clientIP,
-          remaining: rateLimitResult.remaining
-        },
-        ip_address: clientIP
-      });
-
+    if (!allowed) {
       return new Response(
         JSON.stringify({ 
           ok: false, 
           error: 'Rate limit exceeded. Please try again later.',
-          remaining: rateLimitResult.remaining
+          remaining
         }),
-        { 
-          status: 429,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        }
+        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Validate Auth
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
+    const authResult = await authenticateUser(req);
+    if (!authResult) {
       return new Response(
-        JSON.stringify({ ok: false, error: 'Unauthorized: Missing Authorization header' }),
+        JSON.stringify({ ok: false, error: 'Unauthorized: Invalid token or missing header' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-
-    // Create User Scoped Client
-    const supabaseUser = createClient(supabaseUrl, supabaseServiceKey, {
-      global: { headers: { Authorization: authHeader } }
-    });
-
-    const { data: { user }, error: userError } = await supabaseUser.auth.getUser();
-    if (userError || !user) {
-      console.warn('Auth error:', userError);
-      return new Response(
-        JSON.stringify({ ok: false, error: 'Unauthorized: Invalid token' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    const { user, supabaseUser } = authResult;
 
     // Parse request body
     const bodyRaw = await req.json().catch(() => ({}));
@@ -152,90 +246,25 @@ async function handleRagSearch(req: Request): Promise<Response> {
     const queryLang = typeof body.queryLang === "string" ? body.queryLang.trim() : undefined;
     const autoLang = typeof body.autoLang === "boolean" ? body.autoLang : undefined;
 
-    // Resolve Org ID
-    // Check body first, then filters, then user metadata
-    let orgId = typeof body.orgId === "string" ? body.orgId : (typeof filters.org_id === "string" ? filters.org_id : undefined);
-
-    if (!orgId && user.app_metadata && typeof user.app_metadata.org_id === 'string') {
-        orgId = user.app_metadata.org_id;
-    }
-
+    const orgId = resolveOrgId(body, filters, user);
     if (!orgId) {
-         return new Response(
-           JSON.stringify({ ok: false, error: "Missing required field: 'orgId' (in body, filters, or user metadata)" }),
-           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-         );
+       return new Response(
+         JSON.stringify({ ok: false, error: "Missing required field: 'orgId' (in body, filters, or user metadata)" }),
+         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+       );
     }
 
-    // If caller didn't provide filters.lang but provided queryLang,
-    // add it automatically unless autoLang === false
+    // Apply language filter logic
     if (!hasOwn(filters, "lang") && queryLang && autoLang !== false) {
       (filters as AnyRecord).lang = queryLang;
     }
 
-    // Generate Embedding
-    const openaiKey = Deno.env.get('OPENAI_API_KEY');
-    if (!openaiKey) {
-        throw new Error('OPENAI_API_KEY not configured');
-    }
+    const embedding = await generateQueryEmbedding(query, queryLang);
 
-    const { normalized } = normalizeTextForEmbedding(query, queryLang);
-
-    const embeddingResp = await fetch('https://api.openai.com/v1/embeddings', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${openaiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: 'text-embedding-3-small',
-        input: normalized,
-        dimensions: 1536
-      })
-    });
-
-    if (!embeddingResp.ok) {
-        const errText = await embeddingResp.text();
-        console.error('OpenAI API Error:', errText);
-        throw new Error(`OpenAI API error: ${errText}`);
-    }
-
-    const embeddingData = await embeddingResp.json();
-    const embedding = embeddingData.data[0].embedding;
-
-    // Execute Search
     const matchCount = typeof body.match_count === 'number' ? body.match_count : 10;
     const threshold = typeof body.threshold === 'number' ? body.threshold : 0.7;
 
-    // Run parallel searches
-    const [emailResults, callResults] = await Promise.all([
-        supabaseUser.rpc('match_email_chunks', {
-            query_org_id: orgId,
-            query_user_id: user.id,
-            query_embedding: JSON.stringify(embedding),
-            match_count: matchCount,
-            similarity_threshold: threshold
-        }),
-        supabaseUser.rpc('match_call_chunks', {
-             query_org_id: orgId,
-             query_embedding: JSON.stringify(embedding),
-             match_count: matchCount,
-             similarity_threshold: threshold
-        })
-    ]);
-
-    if (emailResults.error) {
-        console.warn('Email search RPC error:', emailResults.error);
-    }
-    if (callResults.error) {
-        console.warn('Call search RPC error:', callResults.error);
-    }
-
-    // Combine and Sort Results
-    const combinedResults = [
-        ...(emailResults.data || []).map((r: any) => ({ ...r, type: 'email' })),
-        ...(callResults.data || []).map((r: any) => ({ ...r, type: 'call' }))
-    ].sort((a, b) => b.similarity - a.similarity).slice(0, matchCount);
+    const combinedResults = await executeSearch(supabaseUser, orgId, user, embedding, matchCount, threshold);
 
     const payload = {
       ok: true,
@@ -243,10 +272,10 @@ async function handleRagSearch(req: Request): Promise<Response> {
       orgId,
       filters,
       results: combinedResults,
-      remaining: rateLimitResult.remaining - 1
+      remaining: remaining - 1
     };
 
-    // Log successful request (using Admin client for logging)
+    // Log successful request
     await supabaseAdmin.from('analytics_events').insert({
       event_type: 'rag_search_request',
       event_data: { 
@@ -255,7 +284,7 @@ async function handleRagSearch(req: Request): Promise<Response> {
         user_id: user.id,
         result_count: combinedResults.length,
         ip: clientIP,
-        remaining: rateLimitResult.remaining - 1
+        remaining: remaining - 1
       },
       ip_address: clientIP
     });
