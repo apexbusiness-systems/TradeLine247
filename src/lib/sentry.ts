@@ -20,7 +20,7 @@ export const initSentry = () => {
     tracePropagationTargets: [
       "localhost",
       /^https:\/\/.*\.supabase\.co/, // Matches Supabase projects
-      /^https:\/\/.*\.tradeline247ai\.com/ // Matches production domain
+      /^https:\/\/.*\.tradeline247ai\.com(\/|$)/ // Matches production domain
     ],
     // Session Replay
     replaysSessionSampleRate: 0.1, // This sets the sample rate at 10%. You may want to change it to 100% while in development and then sample at a lower rate in production.
