@@ -14,6 +14,8 @@
  *   logger.debug('State updated', { oldState, newState });
  */
 
+import * as Sentry from '@sentry/react';
+
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 interface LogMetadata {
@@ -82,24 +84,57 @@ class Logger {
     message: string,
     metadata?: LogMetadata
   ): Promise<void> {
-    // In production, send logs to your monitoring service
-    // For now, we'll use console.error/warn/info which are preserved by Terser
-    if (!this.isProduction) {
-      return;
-    }
+    const timestamp = new Date().toISOString();
 
+    // In production (or whenever not dev), send logs to monitoring service
     try {
-      // TODO: Integrate with your monitoring service (Sentry, LogRocket, etc.)
-      // For now, just use console methods that are preserved in production
       if (level === 'error') {
         console.error(`[${level.toUpperCase()}]`, message, metadata);
+
+        // Capture as Sentry exception with full context
+        // Check if metadata contains an error object, or create one
+        const errorObj = (metadata?.error instanceof Error)
+          ? metadata.error
+          : new Error(message);
+
+        Sentry.captureException(errorObj, {
+          level: 'error',
+          extra: metadata,
+          tags: {
+            source: 'logger',
+            timestamp,
+          },
+        });
       } else if (level === 'warn') {
         console.warn(`[${level.toUpperCase()}]`, message, metadata);
-      } else {
+
+        // Send warnings as Sentry messages (lower priority)
+        Sentry.captureMessage(message, {
+          level: 'warning',
+          extra: metadata,
+          tags: { source: 'logger' },
+        });
+      } else if (level === 'info') {
         console.info(`[${level.toUpperCase()}]`, message, metadata);
+
+        // Add info logs as breadcrumbs (don't send to Sentry directly)
+        Sentry.addBreadcrumb({
+          category: 'info',
+          message,
+          level: 'info',
+          data: metadata,
+        });
+      } else {
+        // debug/trace: console only, no Sentry
+        console.log(`[${level.toUpperCase()}]`, message, metadata);
       }
-    } catch (error) {
-      // Silently fail - logging errors shouldn't break the app
+    } catch (sentryError) {
+      // Fallback if Sentry fails - don't break app
+      console.error('[LOGGER] Sentry integration failed:', sentryError);
+
+      // Ensure we still log to console if Sentry failed and we haven't already
+      // (The console logs above happen before Sentry calls, so likely already logged,
+      // but good to be safe if logic changes)
     }
   }
 
