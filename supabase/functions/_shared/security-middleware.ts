@@ -409,7 +409,10 @@ export class EnterpriseSecurity {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 3000); // 3s timeout
 
-      const response = await fetch(`https://ipapi.co/${ip}/json/`, {
+      // Use URL constructor to prevent SSRF/injection attacks
+      const url = new URL(`https://ipapi.co/${ip}/json/`);
+
+      const response = await fetch(url.toString(), {
         signal: controller.signal,
         headers: { 'User-Agent': 'TradeLine247-Security/1.0' }
       });
