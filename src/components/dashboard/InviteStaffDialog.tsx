@@ -21,6 +21,7 @@ import { Loader2, Mail, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client.ts';
 import { errorReporter } from '@/lib/errorReporter';
+import { ensureMembership } from '@/lib/ensureMembership';
 
 interface InviteStaffDialogProps {
   open: boolean;
@@ -44,43 +45,52 @@ export const InviteStaffDialog: React.FC<InviteStaffDialogProps> = ({
 
     setLoading(true);
     try {
-      // TODO: Implement actual invitation logic with your backend
-      // This is a placeholder that simulates the invitation
-      
-      // In a real implementation, you would:
-      // 1. Create an invitation record in the database
-      // 2. Send an email invitation via edge function
-      // 3. Generate a secure invitation token
-      
-      const { data, error } = await supabase
-        .from('team_invitations')
-        .insert({
-          email,
-          role,
-          invited_by: (await supabase.auth.getUser()).data.user?.id,
-          status: 'pending',
-          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-        })
-        .select()
-        .single();
-
-      if (error) {
-        // If table doesn't exist, show a friendly message
-        if (error.code === '42P01') {
-          toast.info('Team invitations will be available soon', {
-            description: 'This feature is currently being set up. Contact support to add team members.',
-          });
-          setEmail('');
-          setName('');
-          onOpenChange(false);
-          return;
-        }
-        throw error;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error('You must be logged in to invite team members');
       }
 
-      toast.success('Invitation sent successfully', {
-        description: `An invitation has been sent to ${email}`,
+      // Get the organization ID for the current user
+      const { orgId, error: orgError } = await ensureMembership(user);
+      
+      if (orgError || !orgId) {
+        throw new Error(orgError || 'Could not determine your organization. Please contact support.');
+      }
+
+      // Call the Edge Function to handle the invitation
+      const { data, error } = await supabase.functions.invoke('invite-staff', {
+        body: {
+          email,
+          role,
+          name,
+          organization_id: orgId,
+        },
       });
+
+      if (error) {
+        // Try to parse the error message from the response body if possible
+        // The Supabase JS client usually puts the response body in error.context if it's an HTTP error
+        let errorMessage = error.message;
+        try {
+            if (error instanceof Error && 'context' in error && (error as any).context instanceof Response) {
+                const body = await (error as any).context.json();
+                if (body && body.error) {
+                    errorMessage = body.error;
+                }
+            }
+        } catch (e) {
+            // Ignore parsing errors
+        }
+        throw new Error(errorMessage);
+      }
+
+      if (data?.warning) {
+          toast.warning(data.warning);
+      } else {
+          toast.success('Invitation sent successfully', {
+            description: `An invitation has been sent to ${email}`,
+          });
+      }
 
       setEmail('');
       setName('');
