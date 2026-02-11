@@ -5,8 +5,8 @@
   }
 
   // Check for safe mode
-  var params = new URLSearchParams(window.location.search);
-  var safe = params.get('safe') === '1' || window.__SAFE_MODE__ === true;
+  const params = new URLSearchParams(globalThis.location.search);
+  const safe = params.get('safe') === '1' || globalThis.__SAFE_MODE__ === true;
 
   if (safe) {
     console.log('🛡️ Safe Mode: service worker registration skipped');
@@ -20,13 +20,13 @@
   }
 
   // Only register in production (detect by checking if hostname is not localhost/127.0.0.1)
-  var isProduction = window.location.hostname !== 'localhost' &&
-                    window.location.hostname !== '127.0.0.1' &&
-                    !window.location.hostname.startsWith('192.168.') &&
-                    !window.location.hostname.endsWith('.local');
+  const isProduction = globalThis.location.hostname !== 'localhost' &&
+                    globalThis.location.hostname !== '127.0.0.1' &&
+                    !globalThis.location.hostname.startsWith('192.168.') &&
+                    !globalThis.location.hostname.endsWith('.local');
 
   if (isProduction) {
-    window.addEventListener('load', function() {
+    globalThis.addEventListener('load', function() {
       navigator.serviceWorker.register('/sw.js')
         .then(function(registration) {
           console.log('✅ TradeLine 24/7 SW registered:', registration.scope);
