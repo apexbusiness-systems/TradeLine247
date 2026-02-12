@@ -4,10 +4,11 @@
  * Express routes for push notification registration and testing.
  */
 
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { supabase } from '../supabase/client';
 import { sendPushToDevice } from './fcm';
 import { createRateLimiter } from '../middleware/rateLimit';
+import { requireAdmin, AuthenticatedRequest } from '../middleware/adminCheck';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 const router = Router();
@@ -166,27 +167,26 @@ router.post('/unregister', pushLimiter, async (req: Request, res: Response) => {
 });
 
 /**
+ * Middleware adapter for authenticateRequest
+ */
+const authMiddleware = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  const auth = await authenticateRequest(req);
+  if (!auth) {
+    res.status(401).json({ success: false, error: 'Unauthorized' });
+    return;
+  }
+  req.auth = auth;
+  next();
+};
+
+/**
  * POST /api/push/test
  * Send a test push notification (admin/internal only)
  */
-router.post('/test', pushLimiter, async (req: Request, res: Response) => {
+router.post('/test', pushLimiter, authMiddleware, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const auth = await authenticateRequest(req);
-    if (!auth) {
-      return res.status(401).json({ success: false, error: 'Unauthorized' });
-    }
-
-    // Verify the user has admin privileges before allowing test pushes
-    const { data: roleRow } = await supabase
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', auth.userId)
-      .single();
-
-    if (!roleRow || roleRow.role !== 'admin') {
-      return res.status(403).json({ success: false, error: 'Forbidden — admin role required' });
-    }
-
+    // Auth and Admin check handled by middleware
+    // We can safely access req.auth here as it's populated by authMiddleware and verified by requireAdmin
     const { userId: targetUserId, deviceId, title, body, data } = req.body;
 
     if (!title || !body) {
@@ -197,7 +197,7 @@ router.post('/test', pushLimiter, async (req: Request, res: Response) => {
     }
 
     // Get device token(s) for target user
-    let query = auth.supabaseClient
+    let query = req.auth!.supabaseClient
       .from('device_push_tokens')
       .select('device_token, fcm_token')
       .eq('is_active', true);
@@ -205,7 +205,7 @@ router.post('/test', pushLimiter, async (req: Request, res: Response) => {
     if (deviceId) {
       query = query.eq('id', deviceId);
     } else {
-      const targetUser = targetUserId || auth.userId;
+      const targetUser = targetUserId || req.auth!.userId;
       query = query.eq('user_id', targetUser);
     }
 
@@ -262,7 +262,7 @@ router.post('/test', pushLimiter, async (req: Request, res: Response) => {
         
         // If token is invalid, mark as inactive
         if (errorMessage === 'INVALID_TOKEN') {
-          await auth.supabaseClient
+          await req.auth!.supabaseClient
             .from('device_push_tokens')
             .update({ is_active: false })
             .eq('device_token', token);
