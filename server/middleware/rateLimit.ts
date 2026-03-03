@@ -66,7 +66,7 @@ export function createRateLimiter(config: RateLimitConfig) {
         .single();
 
       if (blocked) {
-        console.warn(`[RateLimit] Blocked request from ${identifier} to ${endpoint}`);
+        console.warn('[RateLimit] Blocked request due to active rate limit policy');
         return res.status(429).json({
           error: 'Too many requests',
           retry_after: new Date(blocked.blocked_until).toISOString()
@@ -113,7 +113,7 @@ export function createRateLimiter(config: RateLimitConfig) {
             }
           });
 
-          console.warn(`[RateLimit] Limit exceeded for ${identifier} on ${endpoint}`);
+          console.warn('[RateLimit] Request limit exceeded and temporary block applied');
           
           return res.status(429).json({
             error: 'Too many requests',
@@ -262,4 +262,3 @@ export async function cleanupRateLimits(): Promise<number> {
     return 0;
   }
 }
-
