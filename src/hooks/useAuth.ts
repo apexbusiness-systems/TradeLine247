@@ -132,10 +132,9 @@ export const useAuth = () => {
       }
       
       setLoading(false);
-    }).catch(async (err) => {
+    }).catch((err) => {
       // Report auth errors to centralized monitoring
       if (typeof window !== 'undefined') {
-        const { errorReporter } = await import('@/lib/errorReporter');
         errorReporter.report({
           type: 'error',
           message: err instanceof Error ? err.message : 'Auth session check failed',
