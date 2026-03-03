@@ -90,7 +90,7 @@ function validateRequest(req, res, next) {
 app.post('/api/onboarding/provision', mockAuth, validateRequest, (req, res) => {
   const { userId, userEmail, userLocation = 'US' } = req.body;
 
-  console.log(`📞 Provisioning request for user: ${userId}, email: ${userEmail}`);
+  console.log('📞 Provisioning request received');
 
   // Simulate processing delay
   setTimeout(() => {
