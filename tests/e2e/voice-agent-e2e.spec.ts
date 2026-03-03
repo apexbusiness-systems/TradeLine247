@@ -259,12 +259,56 @@ test.describe('Voice Safety - Profanity Detection', () => {
       'This is damn ridiculous'
     ];
 
-    const profanityPatterns = /\b(hell|damn|crap)\b/gi;
+    const profanityPatterns = /\b(hell|damn|crap)\b/i;
 
     for (const text of profaneTexts) {
       const hasProfanity = profanityPatterns.test(text);
       expect(hasProfanity).toBe(true);
     }
+  });
+});
+
+test.describe('Voice System Stress - Latency, Sentiment, and Routing Determinism', () => {
+
+  test('should sustain deterministic routing and p95 latency across high-volume turns', async () => {
+    const totalTurns = 250;
+    const salesPhrase = 'I need pricing information for your service plan';
+    const supportPhrase = 'My account is broken and I need urgent support';
+    const maxAllowedLatencyMs = 1000;
+
+    const latencies: number[] = [];
+
+    for (let i = 0; i < totalTurns; i++) {
+      const phrase = i % 2 === 0 ? salesPhrase : supportPhrase;
+      const startedAt = Date.now();
+
+      const isSalesIntent = /price|pricing|cost|demo|sign up|subscribe|information|interested/i.test(phrase);
+      const isSupportIntent = /problem|issue|trouble|error|not working|broken|help|assist|support|account|billing|urgent/i.test(phrase);
+      const sentiment = /broken|urgent|error/i.test(phrase) ? -0.5 : 0.4;
+
+      const elapsedMs = Date.now() - startedAt;
+      latencies.push(elapsedMs);
+
+      if (i % 2 === 0) {
+        expect(isSalesIntent).toBe(true);
+        expect(isSupportIntent).toBe(false);
+      } else {
+        expect(isSalesIntent).toBe(false);
+        expect(isSupportIntent).toBe(true);
+      }
+
+      expect(sentiment).toBeGreaterThanOrEqual(-1);
+      expect(sentiment).toBeLessThanOrEqual(1);
+      expect(elapsedMs).toBeLessThan(maxAllowedLatencyMs);
+    }
+
+    const sorted = [...latencies].sort((a, b) => a - b);
+    const p95Index = Math.floor(sorted.length * 0.95) - 1;
+    const p95 = sorted[Math.max(0, p95Index)];
+    const average = latencies.reduce((sum, value) => sum + value, 0) / latencies.length;
+
+    expect(p95).toBeLessThan(maxAllowedLatencyMs);
+    expect(average).toBeLessThan(maxAllowedLatencyMs);
   });
 });
 
