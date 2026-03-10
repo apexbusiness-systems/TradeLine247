@@ -45,19 +45,17 @@ export interface NetworkStatus {
   saveData?: boolean;
 }
 
-interface QueuedRequest {
+interface QueuedRequest<T = unknown> {
   id: string;
-  request: () => Promise<any>;
+  request: () => Promise<T>;
   retries: number;
   timestamp: number;
-  resolve: (value: any) => void;
-  reject: (error: any) => void;
+  resolve: (value: T | PromiseLike<T>) => void;
+  reject: (error?: unknown) => void;
 }
 
 const MAX_RETRIES = 3;
 const RETRY_DELAYS = [1000, 2000, 4000]; // Exponential backoff
-const REQUEST_QUEUE_KEY = 'tl247_request_queue';
-
 /**
  * Get network type from Connection API
  */
@@ -118,7 +116,12 @@ export function useNetworkStatus() {
   });
 
   const requestQueueRef = useRef<Map<string, QueuedRequest>>(new Map());
-  const retryTimeoutRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  const retryTimeoutRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const [queueSize, setQueueSize] = useState(0);
+
+  const syncQueueSize = useCallback(() => {
+    setQueueSize(requestQueueRef.current.size);
+  }, []);
 
   /**
    * Update network status
@@ -163,23 +166,29 @@ export function useNetworkStatus() {
       };
       
       requestQueueRef.current.set(id, queuedRequest);
+      syncQueueSize();
       
       // Try immediately if online
       if (status.online) {
         processRequest(queuedRequest);
       }
     });
-  }, [status.online]);
+  }, [status.online, syncQueueSize]);
 
   /**
    * Process a single queued request with retry logic
    */
   const processRequest = useCallback(async (queuedRequest: QueuedRequest) => {
     try {
+      if (!navigator.onLine) {
+        return;
+      }
+
       const result = await queuedRequest.request();
       queuedRequest.resolve(result);
       requestQueueRef.current.delete(queuedRequest.id);
       retryTimeoutRef.current.delete(queuedRequest.id);
+      syncQueueSize();
     } catch (error) {
       queuedRequest.retries++;
       
@@ -187,6 +196,7 @@ export function useNetworkStatus() {
         queuedRequest.reject(error);
         requestQueueRef.current.delete(queuedRequest.id);
         retryTimeoutRef.current.delete(queuedRequest.id);
+        syncQueueSize();
         return;
       }
       
@@ -199,7 +209,7 @@ export function useNetworkStatus() {
       
       retryTimeoutRef.current.set(queuedRequest.id, timeoutId);
     }
-  }, []);
+  }, [syncQueueSize]);
 
   /**
    * Process all queued requests
@@ -222,9 +232,10 @@ export function useNetworkStatus() {
       queuedRequest.reject(new Error('Request queue cleared'));
     });
     requestQueueRef.current.clear();
+    syncQueueSize();
     retryTimeoutRef.current.forEach((timeoutId) => clearTimeout(timeoutId));
     retryTimeoutRef.current.clear();
-  }, []);
+  }, [syncQueueSize]);
 
   // Setup listeners
   useEffect(() => {
@@ -261,8 +272,7 @@ export function useNetworkStatus() {
     connectionQuality: status.quality,
     queueRequest,
     clearQueue,
-    hasQueuedRequests: requestQueueRef.current.size > 0,
-    queuedRequestCount: requestQueueRef.current.size,
+    hasQueuedRequests: queueSize > 0,
+    queuedRequestCount: queueSize,
   };
 }
-
