@@ -17,7 +17,7 @@ serve(async (req) => {
 
   const { headers } = req;
   const host = headers.get("host") || "";
-  const wssUrl = `wss://${host}/functions/v1/voice-stream`;
+  const wssUrl = `wss://tradeline247-railway-production.up.railway.app/media-stream`;
 
   // 2. CONTEXT PREPARATION: Trace ID & Caller ID
   // Generate a traceId to track the entire call lifecycle
