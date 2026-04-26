@@ -78,6 +78,11 @@ TradeLine 24/7 revolutionizes business communications with an enterprise-grade A
 - **npm**: ≥10.0.0
 - **Git**: Latest version
 
+## 🚀 Deployment Notes
+
+- Web deployment is Cloudflare Pages only (Vercel workflow/config removed).
+- Repository intentionally contains no git submodules to keep Cloudflare clone/build stable.
+
 ## 🚀 Quick Start
 
 1. **Clone the repository**
