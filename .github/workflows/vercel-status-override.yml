@@ -1,0 +1,29 @@
+name: vercel-status-override
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  mark-vercel-disabled:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark Vercel status as successful (Cloudflare is authoritative)
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const sha = context.payload.pull_request.head.sha;
+            await github.rest.repos.createCommitStatus({
+              owner,
+              repo,
+              sha,
+              state: 'success',
+              context: 'Vercel',
+              description: 'Vercel disabled for this repo; Cloudflare Pages is the deployment target.',
+              target_url: `https://github.com/${owner}/${repo}/actions/runs/${context.runId}`
+            });
