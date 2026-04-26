@@ -33,7 +33,7 @@ TradeLine 24/7 revolutionizes business communications with an enterprise-grade A
 
 ## 🚀 Live Production Platform
 
-- **🌐 Production Application**: [tradeline247.vercel.app](https://tradeline247.vercel.app)
+- **🌐 Production Application**: [tradeline247.pages.dev](https://tradeline247.pages.dev)
 - **📱 iOS App**: Available on App Store (Certified for Enterprise Distribution)
 - **🤖 Android App**: Available on Google Play (Internal Track Ready)
 - **📊 API Documentation**: [Comprehensive API Reference](docs/)
@@ -67,7 +67,7 @@ TradeLine 24/7 revolutionizes business communications with an enterprise-grade A
 - **PWA Support** - Progressive Web App capabilities for all devices
 
 ### DevOps & Deployment
-- **Vercel** - Global CDN with edge computing and analytics
+- **Cloudflare Pages** - Global CDN with edge computing and analytics
 - **GitHub Actions** - Automated CI/CD with comprehensive testing
 - **Codemagic** - Mobile CI/CD with app store publishing
 - **Docker** - Containerized deployments for consistency
@@ -77,6 +77,12 @@ TradeLine 24/7 revolutionizes business communications with an enterprise-grade A
 - **Node.js**: 20.x (LTS)
 - **npm**: ≥10.0.0
 - **Git**: Latest version
+
+## 🚀 Deployment Notes
+
+- Web deployment is Cloudflare Pages only (Vercel workflow/config removed).
+- Repository intentionally contains no git submodules to keep Cloudflare clone/build stable.
+- If `tradeline247ai.com` shows "This deployment is temporarily paused" with HTTP 402, DNS is still pointing to Vercel and must be switched to Cloudflare Pages.
 
 ## 🚀 Quick Start
 
@@ -248,10 +254,10 @@ npm run test:ci:coverage  # With coverage reporting
 
 ## 🚢 Deployment
 
-### Web Deployment (Vercel)
+### Web Deployment (Cloudflare Pages)
 ```bash
 npm run build:web
-# Deploy via Vercel dashboard or GitHub integration
+# Deploy via Cloudflare Pages dashboard or GitHub integration
 ```
 
 ### Mobile Builds
@@ -266,7 +272,7 @@ npm run build:android
 ### CI/CD
 - **GitHub Actions**: Automated testing and deployment
 - **Codemagic**: iOS/Android mobile builds
-- **Vercel**: Web deployment with preview environments
+- **Cloudflare Pages**: Web deployment with preview environments
 - **Railway**: Node.js Voice Server deployment
 
 

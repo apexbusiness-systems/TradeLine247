@@ -73,10 +73,10 @@ We do not sell, rent, or lease personal information to third parties.
   - Privacy: SOC 2 Type II, GDPR compliant
   - Link: https://supabase.com/privacy
 
-- **Vercel**: Web hosting and deployment
+- **Cloudflare Pages**: Web hosting and deployment
   - Data: Static website content (no user data)
   - Privacy: ISO 27001 certified
-  - Link: https://vercel.com/legal/privacy-policy
+  - Link: https://cloudflare.com/privacypolicy/
 
 **Legal Requirements:**
 - Valid subpoenas and court orders

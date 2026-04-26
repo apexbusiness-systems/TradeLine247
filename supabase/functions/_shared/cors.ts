@@ -13,8 +13,8 @@ const ALLOWED_ORIGINS = [
   'https://app.tradeline247ai.com',
   // Supabase hosted
   'https://hysvqdwmhxnblxfqnszn.supabase.co',
-  // Preview/Staging (Vercel)
-  'https://tradeline247.vercel.app',
+  // Preview/Staging (Cloudflare Pages)
+  'https://tradeline247.pages.dev',
   // Development
   'http://localhost:8080',
   'http://localhost:3000',
@@ -24,8 +24,8 @@ const ALLOWED_ORIGINS = [
   'http://127.0.0.1:4176',
 ];
 
-// Pattern for Vercel preview deployments
-const VERCEL_PREVIEW_PATTERN = /^https:\/\/tradeline247[a-z0-9-]*\.vercel\.app$/;
+// Pattern for Cloudflare Pages preview deployments
+const CLOUDFLARE_PREVIEW_PATTERN = /^https:\/\/[a-z0-9-]+\.tradeline247\.pages\.dev$/;
 const LOVABLE_PREVIEW_PATTERN = /^https:\/\/[a-z0-9-]+\.lovable\.app$/;
 
 const ALLOW_HEADERS = [
@@ -47,8 +47,8 @@ export function isOriginAllowed(origin: string | null): boolean {
   // Check exact match
   if (ALLOWED_ORIGINS.includes(origin)) return true;
 
-  // Check Vercel preview pattern
-  if (VERCEL_PREVIEW_PATTERN.test(origin)) return true;
+  // Check Cloudflare Pages preview pattern
+  if (CLOUDFLARE_PREVIEW_PATTERN.test(origin)) return true;
 
   // Check Lovable preview pattern
   if (LOVABLE_PREVIEW_PATTERN.test(origin)) return true;

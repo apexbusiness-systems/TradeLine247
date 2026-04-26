@@ -126,7 +126,7 @@ if (envExample) {
 console.log('\n📋 Checking Content Security Policy...\n');
 
 const cspFiles = [
-  'vercel.json',
+  'public/_headers',
   'src/components/security/SecurityMonitor.tsx',
   'vite.config.ts',
 ];
