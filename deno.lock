@@ -115,7 +115,6 @@
         "npm:@types/react-dom@^18.3.7",
         "npm:@types/react@^18.3.27",
         "npm:@types/testing-library__jest-dom@^5.14.9",
-        "npm:@vercel/analytics@^1.6.1",
         "npm:@vitejs/plugin-react-swc@^4.2.2",
         "npm:@vitejs/plugin-react@^4.7.0",
         "npm:autoprefixer@^10.4.22",

@@ -139,7 +139,7 @@ Modify `styles.css` for brand updates:
 
 ### Option 1: Static Hosting (Recommended)
 ```bash
-# Upload to any static host (Vercel, Netlify, etc.)
+# Upload to any static host (Cloudflare Pages, Netlify, etc.)
 # Files are self-contained, no server required
 ```
 

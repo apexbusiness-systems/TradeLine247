@@ -43,10 +43,10 @@ const addOrUpdateMeta = (name: string, content: string, isHttpEquiv = false) => 
 
 const applyConservativeHeaders = () => {
   if (typeof window === 'undefined') return;
-  // Only apply on custom domains / real prod; skip localhost, *.vercel.app, *.lovable.app previews
+  // Only apply on custom domains / real prod; skip localhost, *.pages.dev, *.lovable.app previews
   const host = window.location.hostname;
   const isLocal = host === 'localhost' || host.endsWith('.local');
-  const isPreview = host.endsWith('.vercel.app') || host.includes('lovable.app');
+  const isPreview = host.endsWith('.pages.dev') || host.includes('lovable.app');
   if (isLocal || isPreview) return;
 
   // Idempotent, conservative CSP — avoids breaking common CDNs and Supabase.

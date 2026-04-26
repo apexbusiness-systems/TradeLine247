@@ -59,7 +59,7 @@
 │  └─────────────┘    └─────────────┘    └─────────────┘         │
 ├─────────────────────────────────────────────────────────────────┤
 │  ┌─────────────────────────────────────────────────────────┐   │
-│  │                 Vercel Edge Network                     │   │
+│  │                 Cloudflare Pages Edge Network                     │   │
 │  │     Global CDN • Auto-scaling • Edge Computing         │   │
 │  └─────────────────────────────────────────────────────────┘   │
 ├─────────────────────────────────────────────────────────────────┤
@@ -437,7 +437,7 @@
 
 ### Deployment Infrastructure
 
-#### Vercel Deployment
+#### Cloudflare Pages Deployment
 - **Global CDN:** 35+ edge locations worldwide
 - **Auto-scaling:** Automatic scaling based on traffic patterns
 - **Preview Deployments:** Branch-based preview environments
@@ -520,7 +520,7 @@
 
 ### Media & Press
 - **Email:** press@tradeline247ai.com
-- **Website:** tradeline247.vercel.app
+- **Website:** tradeline247.pages.dev
 
 ### General Inquiries
 - **Email:** info@tradeline247ai.com
