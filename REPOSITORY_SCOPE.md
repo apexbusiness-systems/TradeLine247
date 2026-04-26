@@ -14,7 +14,7 @@
 ### Key Metrics
 - **Tech Stack:** React 18 + TypeScript + Vite + Supabase + Twilio
 - **Platforms:** Web (PWA), iOS (Capacitor), Android (Capacitor)
-- **Deployment:** Vercel (web), TestFlight (iOS), Codemagic CI/CD
+- **Deployment:** Cloudflare Pages (web), TestFlight (iOS), Codemagic CI/CD
 - **Codebase Size:** ~1,944 commits, 100+ components, 80+ Supabase edge functions
 - **Test Coverage:** Playwright E2E + Vitest unit tests with 80% coverage thresholds
 
@@ -75,7 +75,7 @@
 ### Infrastructure
 
 **Deployment:**
-- **Vercel** for web deployment (server.mjs Express server)
+- **Cloudflare Pages** for web deployment (server.mjs Express server)
 - **Codemagic** for iOS builds (TestFlight distribution)
 - **GitHub Actions** (implied, not explicitly configured)
 
@@ -301,9 +301,9 @@ tests/
 
 ## 🚀 DEPLOYMENT & CI/CD
 
-### Web Deployment (Vercel)
+### Web Deployment (Cloudflare Pages)
 
-**Configuration (`vercel.json`):**
+**Configuration (`public/_headers + wrangler.toml`):**
 - Security headers for all routes
 - CSP, HSTS, X-Frame-Options configured
 - Static asset caching (1 year)
@@ -628,7 +628,7 @@ npm run check:fn:secret-encrypt    # Deno type checking
 - ✅ Production build: Successful
 
 ### Deployment Status
-- ✅ Web: Deployed to Vercel
+- ✅ Web: Deployed to Cloudflare Pages
 - ✅ iOS: Codemagic pipeline configured
 - ✅ Environment: Configured with fallbacks
 
@@ -666,7 +666,7 @@ npm run check:fn:secret-encrypt    # Deno type checking
 - ✅ Comprehensive architecture (frontend + backend + mobile)
 - ✅ Robust security (auth, RLS, rate limiting, CSP)
 - ✅ Extensive testing (unit + E2E + accessibility)
-- ✅ CI/CD pipelines (Vercel + Codemagic)
+- ✅ CI/CD pipelines (Cloudflare Pages + Codemagic)
 - ✅ 80+ Supabase edge functions
 - ✅ 100+ React components
 - ✅ Enterprise-grade features (RAG, A/B testing, compliance)

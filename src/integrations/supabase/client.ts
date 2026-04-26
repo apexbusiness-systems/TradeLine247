@@ -28,7 +28,7 @@ if (url && anonKey) {
 } else {
   if (typeof window !== 'undefined') {
     console.error(
-      '[supabase] Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY! Check your .env or Vercel settings.'
+      '[supabase] Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY! Check your .env or Cloudflare settings.'
     );
   } else {
     console.info(

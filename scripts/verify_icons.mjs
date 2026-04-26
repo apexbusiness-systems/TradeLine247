@@ -3,9 +3,9 @@ import fs from "fs";
 import path from "path";
 import { execFileSync } from "child_process";
 
-// Skip iOS icon verification on Vercel (web deploy, not iOS build)
-if (process.env.VERCEL) {
-  console.log("[verify:icons] Skipping iOS icon checks on Vercel deploy.");
+// Skip iOS icon verification on Cloudflare Pages (web deploy, not iOS build)
+if (process.env.CF_PAGES || process.env.CLOUDFLARE_PAGES) {
+  console.log("[verify:icons] Skipping iOS icon checks on Cloudflare Pages deploy.");
   process.exit(0);
 }
 

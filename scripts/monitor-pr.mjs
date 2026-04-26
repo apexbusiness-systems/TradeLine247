@@ -6,7 +6,7 @@
 
 import { spawnSync } from 'node:child_process';
 
-const PR_BRANCH = 'fix/vercel-a11y-security-pr';
+const PR_BRANCH = 'fix/cloudflare-a11y-security-pr';
 const REPO = 'apexbusiness-systems/tradeline247aicom';
 
 function run(command, args) {
@@ -88,7 +88,7 @@ async function main() {
     console.log('\n📋 Next Steps:');
     console.log(`1. Create PR: https://github.com/${REPO}/pull/new/${PR_BRANCH}`);
     console.log('2. Monitor CI/CD status in GitHub Actions');
-    console.log('3. Check Vercel deployment status');
+    console.log('3. Check Cloudflare deployment status');
     console.log('\n✅ Branch is ready for PR creation!');
   } else {
     console.log('\n❌ Branch not ready. Please push the branch first.');

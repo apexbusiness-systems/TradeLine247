@@ -6,7 +6,7 @@
  * - VITE_SUPABASE_ANON_KEY: The public anonymous key (safe for client-side)
  *
  * SECURITY: No fallback values are provided to prevent accidental credential exposure.
- * Configure these in your deployment environment (Vercel, etc).
+ * Configure these in your deployment environment (Cloudflare, etc).
  */
 
 // SECURITY: Require environment variables - no hardcoded fallbacks

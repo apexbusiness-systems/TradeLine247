@@ -1,7 +1,6 @@
 // FILE: src/App.tsx
 import React, { Suspense, lazy, useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { Analytics } from "@vercel/analytics/react";
 
 import LayoutShell from "./components/layout/LayoutShell";
 import SafeErrorBoundary from "./components/errors/SafeErrorBoundary";
@@ -150,7 +149,6 @@ export default function App() {
             </Suspense>
           </DeepLinkHandler>
         </BrowserRouter>
-        <Analytics />
       </div>
     </SafeErrorBoundary>
   );

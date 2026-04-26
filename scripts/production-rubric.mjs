@@ -22,7 +22,7 @@ const checks = {
   lint: { name: 'ESLint (0 warnings)', passed: false, error: null },
   tests: { name: 'Unit Tests', passed: false, error: null },
   requiredFiles: { name: 'Required Files Present', passed: false, error: null },
-  vercelPrebuild: { name: 'Vercel Prebuild Script', passed: false, error: null },
+  cloudflarePrebuild: { name: 'Cloudflare Prebuild Script', passed: false, error: null },
   noConsoleErrors: { name: 'No Console Errors in Critical Files', passed: false, error: null },
   accessibility: { name: 'Accessibility (h1 present, contrast)', passed: false, error: null },
   workflowSyntax: { name: 'GitHub Actions Workflow Syntax', passed: false, error: null },
@@ -37,7 +37,7 @@ async function checkRequiredFiles() {
     'package.json',
     'vite.config.ts',
     'scripts/check-required-files.mjs',
-    'vercel.json',
+    'public/_headers',
   ];
 
   const missing = [];
@@ -56,7 +56,7 @@ async function checkRequiredFiles() {
   return true;
 }
 
-async function checkVercelPrebuild() {
+async function checkCloudflarePrebuild() {
   try {
     const result = spawnSync('node', ['scripts/check-required-files.mjs'], {
       cwd: repoRoot,
@@ -66,10 +66,10 @@ async function checkVercelPrebuild() {
     if (result && result.includes('✅ All required files found')) {
       return true;
     }
-    checks.vercelPrebuild.error = 'Prebuild script did not pass';
+    checks.cloudflarePrebuild.error = 'Prebuild script did not pass';
     return false;
   } catch (error) {
-    checks.vercelPrebuild.error = error.message;
+    checks.cloudflarePrebuild.error = error.message;
     return false;
   }
 }
@@ -125,16 +125,11 @@ function checkWorkflowSyntax() {
 
 function checkSecurity() {
   try {
-    const vercelJson = JSON.parse(readFileSync(join(repoRoot, 'vercel.json'), 'utf-8'));
-    const hasSecurityHeaders = vercelJson.headers &&
-                               vercelJson.headers.some(h =>
-                                 h.headers?.some(header =>
-                                   header.key === 'X-Content-Type-Options'
-                                 )
-                               );
+    const headersFile = readFileSync(join(repoRoot, 'public/_headers'), 'utf-8');
+    const hasSecurityHeaders = headersFile.includes('X-Content-Type-Options: nosniff');
 
     if (!hasSecurityHeaders) {
-      checks.security.error = 'Missing security headers in vercel.json';
+      checks.security.error = 'Missing security headers in public/_headers';
       return false;
     }
 
@@ -187,8 +182,8 @@ async function main() {
   // 1. Required Files
   await runCheck('requiredFiles', checkRequiredFiles);
 
-  // 2. Vercel Prebuild
-  await runCheck('vercelPrebuild', checkVercelPrebuild);
+  // 2. Cloudflare Prebuild
+  await runCheck('cloudflarePrebuild', checkCloudflarePrebuild);
 
   // 3. Build
   await runCommandCheck('build', 'npm', ['run', 'build'], 'built in');
